@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { usePathname, useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import {
   Activity,
   BarChart3,
@@ -65,6 +66,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [adminName, setAdminName] = useState('Administrator')
+  const [checkingAccess, setCheckingAccess] = useState(true)
 
   useEffect(() => {
     const saved = window.localStorage.getItem('rvc-admin-theme')
@@ -72,6 +75,24 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     setDark(isDark)
     document.documentElement.classList.toggle('dark', isDark)
   }, [])
+
+  useEffect(() => {
+    const verifyAdmin = async () => {
+      const supabase = createClient()
+      const { data: userData } = await supabase.auth.getUser()
+      if (!userData.user) { router.replace('/rvc-control-9x2f'); return }
+      const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', userData.user.id).single()
+      if (profile?.role !== 'super_admin') { await supabase.auth.signOut(); router.replace('/rvc-control-9x2f'); return }
+      setAdminName(profile.full_name || 'Administrator')
+      setCheckingAccess(false)
+    }
+    verifyAdmin()
+  }, [router])
+
+  const signOut = async () => {
+    await createClient().auth.signOut()
+    router.replace('/rvc-control-9x2f')
+  }
 
   const toggleTheme = () => {
     const next = !dark
@@ -91,6 +112,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     setSearchOpen(false)
   }
 
+  if (checkingAccess) return <div className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground">Verifying secure access…</div>
+
+  const initials = adminName.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/20">
       <AnimatePresence>
@@ -140,8 +164,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             {!collapsed && <span>{dark ? 'Light mode' : 'Dark mode'}</span>}
           </button>
           <div className="mt-2 flex items-center gap-3 rounded-xl bg-muted/60 px-3 py-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">AK</span>
-            {!collapsed && <div className="min-w-0"><p className="truncate text-sm font-semibold">Arjun Kapoor</p><p className="truncate text-xs text-muted-foreground">Super Admin</p></div>}
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">{initials}</span>
+            {!collapsed && <div className="min-w-0"><p className="truncate text-sm font-semibold">{adminName}</p><p className="truncate text-xs text-muted-foreground">Super Admin</p></div>}
           </div>
         </div>
       </aside>
@@ -155,8 +179,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <button type="button" aria-label="Search" onClick={() => setSearchOpen(true)} className="rounded-xl p-2.5 text-muted-foreground hover:bg-muted hover:text-foreground"><Search className="size-5" /></button>
             <button type="button" aria-label="Notifications" onClick={() => setNotificationsOpen((value) => !value)} className="relative rounded-xl p-2.5 text-muted-foreground hover:bg-muted hover:text-foreground"><Bell className="size-5" /><span className="absolute right-2 top-2 size-1.5 rounded-full bg-accent" /></button>
             <div className="relative">
-              <button type="button" onClick={() => setProfileOpen((value) => !value)} className="flex items-center gap-2 rounded-xl p-1.5 hover:bg-muted"><span className="grid size-9 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">AK</span><ChevronDown className="hidden size-4 text-muted-foreground sm:block" /></button>
-              <AnimatePresence>{profileOpen && <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute right-0 top-12 w-48 rounded-2xl border border-border bg-card p-2 shadow-2xl"><p className="px-3 py-2 text-xs text-muted-foreground">Signed in as</p><p className="px-3 pb-2 text-sm font-semibold">Arjun Kapoor</p><button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => navigate('/rvc-control-9x2f/dashboard/settings')}>Account settings</button><button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => router.push('/rvc-control-9x2f')}>Sign out</button></motion.div>}</AnimatePresence>
+              <button type="button" onClick={() => setProfileOpen((value) => !value)} className="flex items-center gap-2 rounded-xl p-1.5 hover:bg-muted"><span className="grid size-9 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{initials}</span><ChevronDown className="hidden size-4 text-muted-foreground sm:block" /></button>
+              <AnimatePresence>{profileOpen && <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute right-0 top-12 w-52 rounded-2xl border border-border bg-card p-2 shadow-2xl"><p className="px-3 py-2 text-xs text-muted-foreground">Signed in as</p><p className="truncate px-3 pb-2 text-sm font-semibold">{adminName}</p><button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => navigate('/rvc-control-9x2f/dashboard/settings')}>Account settings</button><button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-red-500 hover:bg-red-500/10" onClick={signOut}>Sign out</button></motion.div>}</AnimatePresence>
             </div>
           </div>
           <AnimatePresence>{notificationsOpen && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="border-t border-border px-6 py-4"><div className="mx-auto flex max-w-7xl items-center gap-3 text-sm"><span className="size-2 rounded-full bg-emerald-500" /><span className="font-medium">All systems operational.</span><span className="text-muted-foreground">3 new tenant events require review.</span></div></motion.div>}</AnimatePresence>

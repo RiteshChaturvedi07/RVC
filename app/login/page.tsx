@@ -75,9 +75,12 @@ export default function LoginPage() {
     router.push('/enroll-mfa')
     */
 
-    // Redirect straight to dashboard
+    const { data: userData } = await supabase.auth.getUser()
+    const { data: profile } = await supabase.from('profiles').select('role, tenant_id').eq('id', userData.user?.id).single()
     setIsLoading(false)
-    router.push('/dashboard')
+    if (profile?.role === 'super_admin') router.push('/rvc-control-9x2f/dashboard')
+    else if (profile?.tenant_id) router.push('/restaurant-dashboard')
+    else router.push('/dashboard')
   }
 
   const handleOTPComplete = (otpValue: string) => {

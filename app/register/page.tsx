@@ -102,12 +102,6 @@ export default function RegisterPage() {
     }
   }
 
-  const generateSlug = (name: string) => {
-    const base = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-    const suffix = Math.random().toString(36).slice(2, 7)
-    return `${base}-${suffix}`
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!validateStep(3)) return
@@ -121,7 +115,15 @@ export default function RegisterPage() {
         email: formData.email,
         password: formData.password,
         options: {
-          data: { full_name: formData.ownerName },
+          // The database trigger creates the tenant and owner profile atomically.
+          // Keeping these values in auth metadata avoids browser-side role assignment.
+          data: {
+            full_name: formData.ownerName,
+            phone: formData.phone,
+            business_name: formData.businessName,
+            business_type: formData.businessType,
+            plan: formData.plan,
+          },
         },
       })
 
@@ -130,36 +132,7 @@ export default function RegisterPage() {
         throw new Error('Signup succeeded but no session was returned. Check if "Confirm email" is enabled in Supabase — disable it for local testing.')
       }
 
-      const userId = authData.user.id
-
-      // 2. Create the tenant record
-      const { data: tenant, error: tenantError } = await supabase
-        .from('tenants')
-        .insert({
-          name: formData.businessName,
-          vertical: formData.businessType,
-          slug: generateSlug(formData.businessName),
-          owner_id: userId,
-          subscription_plan: formData.plan,
-          status: 'trial',
-        })
-        .select()
-        .single()
-
-      if (tenantError) throw tenantError
-
-      // 3. Create the profile record, linking user -> tenant, role = tenant_owner
-      const { error: profileError } = await supabase.from('profiles').insert({
-        id: userId,
-        tenant_id: tenant.id,
-        role: 'tenant_owner',
-        full_name: formData.ownerName,
-        phone: formData.phone,
-      })
-
-      if (profileError) throw profileError
-
-      router.push('/login')
+      router.push('/login?registered=1')
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
     } finally {

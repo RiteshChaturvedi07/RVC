@@ -87,7 +87,7 @@ export default function AdminLoginPage() {
     }
 
     setIsLoading(false)
-    router.push('/dashboard')
+    router.push('/rvc-control-9x2f/dashboard')
   }
 
   const handleOTPComplete = (otpValue: string) => {
@@ -143,7 +143,7 @@ export default function AdminLoginPage() {
     }
 
     setIsLoading(false)
-    router.push('/dashboard')
+    router.push('/rvc-control-9x2f/dashboard')
   }
 
   const stepVariants = {
