@@ -54,6 +54,7 @@ export default function AdminLoginPage() {
       return
     }
 
+    /* MFA Bypassed temporarily for fast local development
     const { data: factors } = await supabase.auth.mfa.listFactors()
     const totpFactor = factors?.totp?.[0]
 
@@ -68,6 +69,25 @@ export default function AdminLoginPage() {
     setMfaFactorId(totpFactor.id)
     setStep('otp')
     setIsLoading(false)
+    */
+
+    // Final gate: confirm this account is actually a super_admin before granting access
+    const { data: userData } = await supabase.auth.getUser()
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userData.user?.id)
+      .single()
+
+    if (profile?.role !== 'super_admin') {
+      await supabase.auth.signOut()
+      setErrors({ password: 'Access denied.' })
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(false)
+    router.push('/dashboard')
   }
 
   const handleOTPComplete = (otpValue: string) => {
@@ -123,7 +143,7 @@ export default function AdminLoginPage() {
     }
 
     setIsLoading(false)
-    router.push('/rvc-control-9x2f/dashboard')
+    router.push('/dashboard')
   }
 
   const stepVariants = {

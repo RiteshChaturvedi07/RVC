@@ -54,6 +54,7 @@ export default function LoginPage() {
       return
     }
 
+    /* MFA Bypassed temporarily for fast local development
     // Check if this account has an MFA factor enrolled
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
 
@@ -69,7 +70,12 @@ export default function LoginPage() {
       }
     }
 
-    // No MFA enrolled yet — log straight in (recommend enrolling MFA from account settings later)
+    // No MFA enrolled yet — send them to set it up before entering the dashboard
+    setIsLoading(false)
+    router.push('/enroll-mfa')
+    */
+
+    // Redirect straight to dashboard
     setIsLoading(false)
     router.push('/dashboard')
   }
