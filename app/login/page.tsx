@@ -79,7 +79,10 @@ export default function LoginPage() {
     const { data: profile } = await supabase.from('profiles').select('role, tenant_id').eq('id', userData.user?.id).single()
     setIsLoading(false)
     if (profile?.role === 'super_admin') router.push('/rvc-control-9x2f/dashboard')
-    else if (profile?.tenant_id) router.push('/restaurant-dashboard')
+    else if (profile?.tenant_id) {
+      const { data: tenant } = await supabase.from('tenants').select('vertical').eq('id', profile.tenant_id).single()
+      router.push(tenant?.vertical === 'restaurant' ? '/restaurant-dashboard' : '/coming-soon')
+    }
     else router.push('/dashboard')
   }
 

@@ -190,7 +190,7 @@ export default function RegisterPage() {
                       <motion.button
                         key={biz.id}
                         type="button"
-                        onClick={() => handleInputChange('businessType', biz.id)}
+                        onClick={() => biz.id === 'restaurant' ? handleInputChange('businessType', biz.id) : router.push('/coming-soon')}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         className={`p-4 rounded-lg border-2 transition-all ${
@@ -200,7 +200,7 @@ export default function RegisterPage() {
                         }`}
                       >
                         <Icon className="w-8 h-8 mx-auto mb-2 text-indigo-600 dark:text-indigo-400" />
-                        <p className="font-medium text-slate-900 dark:text-white text-sm">{biz.label}</p>
+                        <p className="font-medium text-slate-900 dark:text-white text-sm">{biz.label}</p>{biz.id !== 'restaurant' && <p className="mt-1 text-xs text-slate-500">Coming soon</p>}
                       </motion.button>
                     )
                   })}

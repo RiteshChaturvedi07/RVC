@@ -2,87 +2,22 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-  BarChart3, Bell, Boxes, ChefHat, ChevronDown, CircleHelp, CreditCard,
-  DollarSign, FileText, Grid2X2, LayoutDashboard, Menu, Moon, PanelLeft,
-  Search, Settings, ShoppingBag, SlidersHorizontal, Sparkles, Sun, Users, X,
-} from 'lucide-react'
+import { BarChart3, Boxes, ChefHat, ChevronDown, CircleHelp, CreditCard, DollarSign, FileText, Grid2X2, LayoutDashboard, Menu, Moon, PanelLeft, Search, Settings, ShoppingBag, Sparkles, Sun, Users, X } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 
 const nav = [
-  { label: 'Overview', href: '/restaurant-dashboard', icon: LayoutDashboard },
-  { label: 'Orders', href: '/restaurant-dashboard/orders', icon: ShoppingBag },
-  { label: 'Tables & QR', href: '/restaurant-dashboard/tables', icon: Grid2X2 },
-  { label: 'Kitchen', href: '/restaurant-dashboard/kitchen', icon: ChefHat },
-  { label: 'Menu Builder', href: '/restaurant-dashboard/menu', icon: FileText },
-  { label: 'Inventory', href: '/restaurant-dashboard/inventory', icon: Boxes },
-  { label: 'Customers', href: '/restaurant-dashboard/customers', icon: Users },
-  { label: 'Marketing', href: '/restaurant-dashboard/marketing', icon: Sparkles },
-  { label: 'Analytics', href: '/restaurant-dashboard/analytics', icon: BarChart3 },
-  { label: 'Finance', href: '/restaurant-dashboard/finance', icon: DollarSign },
-  { label: 'Staff', href: '/restaurant-dashboard/staff', icon: Users },
-  { label: 'Billing', href: '/restaurant-dashboard/billing', icon: CreditCard },
-  { label: 'Support', href: '/restaurant-dashboard/support', icon: CircleHelp },
-  { label: 'Settings', href: '/restaurant-dashboard/settings', icon: Settings },
-]
+  ['Overview','/restaurant-dashboard',LayoutDashboard], ['Orders','/restaurant-dashboard/orders',ShoppingBag], ['Tables & QR','/restaurant-dashboard/tables',Grid2X2], ['Kitchen','/restaurant-dashboard/kitchen',ChefHat], ['Menu Builder','/restaurant-dashboard/menu',FileText], ['Inventory','/restaurant-dashboard/inventory',Boxes], ['Customers','/restaurant-dashboard/customers',Users], ['Marketing','/restaurant-dashboard/marketing',Sparkles], ['Analytics','/restaurant-dashboard/analytics',BarChart3], ['Finance','/restaurant-dashboard/finance',DollarSign], ['Staff','/restaurant-dashboard/staff',Users], ['Billing','/restaurant-dashboard/billing',CreditCard], ['Support','/restaurant-dashboard/support',CircleHelp], ['Settings','/restaurant-dashboard/settings',Settings],
+] as const
 
 export function RestaurantShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
-  const [dark, setDark] = useState(false)
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem('rvc-restaurant-theme')
-    const isDark = stored ? stored === 'dark' : document.documentElement.classList.contains('dark')
-    setDark(isDark)
-    document.documentElement.classList.toggle('dark', isDark)
-  }, [])
-
-  const activeLabel = useMemo(() => nav.find((item) => item.href === pathname)?.label ?? 'Overview', [pathname])
-  const toggleTheme = () => {
-    const next = !dark
-    setDark(next)
-    document.documentElement.classList.toggle('dark', next)
-    window.localStorage.setItem('rvc-restaurant-theme', next ? 'dark' : 'light')
-  }
-
-  return (
-    <div className="min-h-screen bg-background text-foreground">
-      <aside className={`fixed inset-y-0 left-0 z-50 hidden border-r border-border bg-card transition-all lg:block ${collapsed ? 'w-20' : 'w-64'}`}>
-        <div className="flex h-full flex-col">
-          <div className="flex h-20 items-center gap-3 border-b border-border px-5">
-            <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground"><ChefHat size={20} /></div>
-            {!collapsed && <div className="min-w-0"><p className="truncate font-semibold">Spice Kitchen</p><p className="text-xs text-muted-foreground">Restaurant workspace</p></div>}
-          </div>
-          <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-            {nav.map((item) => {
-              const Icon = item.icon
-              const active = item.href === '/restaurant-dashboard' ? pathname === item.href : pathname.startsWith(item.href)
-              return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}><Icon size={18} /><span className={collapsed ? 'sr-only' : ''}>{item.label}</span></Link>
-            })}
-          </nav>
-          <div className="border-t border-border p-3">
-            <button className="flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-secondary"><div className="grid size-9 place-items-center rounded-full bg-accent text-accent-foreground font-semibold">RK</div>{!collapsed && <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">Rajesh Kumar</p><p className="truncate text-xs text-muted-foreground">Owner</p></div>} {!collapsed && <ChevronDown size={15} />}</button>
-          </div>
-        </div>
-      </aside>
-
-      <AnimatePresence>{mobileOpen && <><motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} aria-label="Close navigation" className="fixed inset-0 z-40 bg-slate-950/40 lg:hidden" onClick={() => setMobileOpen(false)} /><motion.aside initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }} className="fixed inset-y-0 left-0 z-50 w-72 border-r border-border bg-card lg:hidden"><div className="flex h-full flex-col"><div className="flex h-20 items-center justify-between border-b border-border px-5"><div className="flex items-center gap-3"><div className="grid size-10 place-items-center rounded-2xl bg-primary text-primary-foreground"><ChefHat size={20} /></div><div><p className="font-semibold">Spice Kitchen</p><p className="text-xs text-muted-foreground">Restaurant workspace</p></div></div><button aria-label="Close navigation" onClick={() => setMobileOpen(false)}><X size={20} /></button></div><nav className="flex-1 space-y-1 overflow-y-auto p-3">{nav.map((item) => { const Icon = item.icon; const active = item.href === '/restaurant-dashboard' ? pathname === item.href : pathname.startsWith(item.href); return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}><Icon size={18} />{item.label}</Link> })}</nav></div></motion.aside></>}</AnimatePresence>
-
-      <div className={`min-h-screen transition-[padding] ${collapsed ? 'lg:pl-20' : 'lg:pl-64'}`}>
-        <header className="sticky top-0 z-30 flex h-20 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur md:px-8">
-          <button className="rounded-lg p-2 hover:bg-secondary lg:hidden" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={20} /></button>
-          <button className="hidden rounded-lg p-2 hover:bg-secondary lg:block" aria-label="Collapse sidebar" onClick={() => setCollapsed((value) => !value)}><PanelLeft size={19} /></button>
-          <div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground">Restaurant workspace</p><h1 className="truncate text-lg font-semibold">{activeLabel}</h1></div>
-          <div className="hidden items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm text-muted-foreground md:flex"><Search size={16} /><span>Search anything</span><kbd className="rounded bg-secondary px-1.5 py-0.5 text-[10px]">⌘ K</kbd></div>
-          <button className="relative rounded-lg p-2 hover:bg-secondary" aria-label="Notifications"><Bell size={19} /><span className="absolute right-1 top-1 size-2 rounded-full bg-accent" /></button>
-          <button className="rounded-lg p-2 hover:bg-secondary" aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={toggleTheme}>{dark ? <Sun size={19} /> : <Moon size={19} />}</button>
-          <button className="hidden rounded-xl border border-border bg-card px-3 py-2 text-sm md:flex md:items-center md:gap-2"><SlidersHorizontal size={15} /> Today <ChevronDown size={15} /></button>
-        </header>
-        <main className="mx-auto max-w-[1600px] p-4 md:p-8">{children}</main>
-      </div>
-    </div>
-  )
+  const pathname = usePathname(); const router = useRouter()
+  const [mobileOpen,setMobileOpen]=useState(false); const [collapsed,setCollapsed]=useState(false); const [dark,setDark]=useState(false); const [checking,setChecking]=useState(true); const [restaurant,setRestaurant]=useState('Restaurant workspace'); const [staff,setStaff]=useState(''); const [searchOpen,setSearchOpen]=useState(false); const [query,setQuery]=useState('')
+  useEffect(()=>{const stored=localStorage.getItem('rvc-restaurant-theme');const isDark=stored==='dark';setDark(isDark);document.documentElement.classList.toggle('dark',isDark)},[])
+  useEffect(()=>{const check=async()=>{const supabase=createClient();const{data:{user}}=await supabase.auth.getUser();if(!user){router.replace('/login');return}const{data:profile}=await supabase.from('profiles').select('tenant_id,role,full_name').eq('id',user.id).single();if(!profile?.tenant_id||!['tenant_owner','staff'].includes(profile.role)){await supabase.auth.signOut();router.replace('/login');return}const{data:tenant}=await supabase.from('tenants').select('vertical').eq('id',profile.tenant_id).single();if(tenant?.vertical!=='restaurant'){router.replace('/coming-soon');return}const{data:settings}=await supabase.from('restaurant_settings').select('display_name').eq('tenant_id',profile.tenant_id).single();setRestaurant(settings?.display_name||'Restaurant workspace');setStaff(profile.full_name||'Restaurant staff');setChecking(false)};check()},[router])
+  const signOut=async()=>{await createClient().auth.signOut();router.replace('/login')}; const toggle=()=>{const next=!dark;setDark(next);localStorage.setItem('rvc-restaurant-theme',next?'dark':'light');document.documentElement.classList.toggle('dark',next)}; const page=useMemo(()=>nav.find(x=>x[1]===pathname)?.[0]??'Overview',[pathname]); const matches=nav.filter(x=>x[0].toLowerCase().includes(query.toLowerCase()))
+  if(checking)return <div className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground">Checking restaurant session…</div>
+  const Sidebar=({mobile=false}:{mobile?:boolean})=><aside className={`${mobile?'fixed inset-y-0 left-0 z-50 w-72':'fixed inset-y-0 left-0 z-50 hidden border-r border-border bg-card lg:block'} ${mobile?'border-r border-border bg-card':'transition-all '+(collapsed?'w-20':'w-64')}`}><div className="flex h-full flex-col"><div className="flex h-20 items-center justify-between border-b border-border px-5"><Link href="/restaurant-dashboard" className="flex min-w-0 items-center gap-3"><span className="grid size-10 place-items-center rounded-2xl bg-primary text-primary-foreground"><ChefHat size={20}/></span>{(!collapsed||mobile)&&<span className="min-w-0"><b className="block truncate">{restaurant}</b><small className="text-muted-foreground">Restaurant workspace</small></span>}</Link>{mobile&&<button onClick={()=>setMobileOpen(false)}><X/></button>}</div><nav className="flex-1 space-y-1 overflow-y-auto p-3">{nav.map(([label,href,Icon])=>{const active=href==='/restaurant-dashboard'?pathname===href:pathname.startsWith(href);return <Link key={href} href={href} onClick={()=>setMobileOpen(false)} title={collapsed?label:undefined} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${active?'bg-primary text-primary-foreground':'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}><Icon size={18}/>{(!collapsed||mobile)&&label}</Link>})}</nav><div className="border-t border-border p-3"><div className="flex items-center gap-3 rounded-xl p-2"><span className="grid size-9 place-items-center rounded-full bg-accent text-xs font-bold text-accent-foreground">{staff.split(' ').map(x=>x[0]).join('').slice(0,2)}</span>{(!collapsed||mobile)&&<div className="min-w-0 flex-1"><b className="block truncate text-sm">{staff}</b><button onClick={signOut} className="text-xs text-red-500 hover:underline">Sign out</button></div>}</div></div></div></aside>
+  return <div className="min-h-screen bg-background text-foreground"><Sidebar/><AnimatePresence>{mobileOpen&&<><motion.button initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onClick={()=>setMobileOpen(false)} className="fixed inset-0 z-40 bg-slate-950/50 lg:hidden"/><motion.div initial={{x:-300}} animate={{x:0}} exit={{x:-300}}><Sidebar mobile/></motion.div></>}</AnimatePresence><div className={collapsed?'lg:pl-20':'lg:pl-64'}><header className="sticky top-0 z-30 flex h-20 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur md:px-8"><button onClick={()=>setMobileOpen(true)} className="lg:hidden"><Menu/></button><button onClick={()=>setCollapsed(!collapsed)} className="hidden lg:block"><PanelLeft/></button><div className="min-w-0 flex-1"><small className="text-muted-foreground">{restaurant}</small><h1 className="truncate text-lg font-semibold">{page}</h1></div><button onClick={()=>setSearchOpen(true)} className="hidden items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm text-muted-foreground md:flex"><Search size={16}/>Search workspace</button><button onClick={toggle} aria-label="Toggle theme" className="rounded-lg p-2 hover:bg-secondary">{dark?<Sun/>:<Moon/>}</button></header><main className="mx-auto max-w-[1600px] p-4 md:p-8">{children}</main></div><AnimatePresence>{searchOpen&&<motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onClick={()=>setSearchOpen(false)} className="fixed inset-0 z-[80] bg-slate-950/50 p-4 pt-24"><motion.div initial={{y:-16}} animate={{y:0}} onClick={e=>e.stopPropagation()} className="mx-auto w-full max-w-xl rounded-2xl border border-border bg-card p-3 shadow-2xl"><div className="flex items-center gap-2 border-b border-border p-2"><Search size={18}/><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search dashboard pages…" className="w-full bg-transparent outline-none"/><button onClick={()=>setSearchOpen(false)}><X size={18}/></button></div>{matches.map(([label,href,Icon])=><button key={href} onClick={()=>{router.push(href);setSearchOpen(false);setQuery('')}} className="mt-1 flex w-full items-center gap-3 rounded-xl p-3 text-left text-sm hover:bg-secondary"><Icon size={17}/>{label}</button>)}{!matches.length&&<p className="p-4 text-sm text-muted-foreground">No matching page.</p>}</motion.div></motion.div>}</AnimatePresence></div>
 }

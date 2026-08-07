@@ -7,6 +7,7 @@
 5. Run `migrations/202608060004_restaurant_operations.sql` once. It adds cash/online-ready payment records and secure restaurant bill settlement.
 6. Run `migrations/202608060005_restaurant_management.sql` once. It activates real restaurant inventory, promotions, settings, and restaurant-created support tickets.
 7. If a QR menu remains on the loading screen or Supabase reports the function missing, run `migrations/202608060006_repair_public_qr_menu.sql` once. It recreates and reloads the public menu API endpoint.
+8. Run `migrations/202608060008_fix_public_order_lock.sql`, `202608060009_customer_order_tracking.sql`, and `202608060010_restaurant_media_and_sessions.sql` in order for payment settlement, customer tracking, menu image uploads, and service controls.
 7. In **Authentication → Providers → Email**, configure your production site URL and redirect URLs. Email confirmation may remain enabled; the tenant is created safely when the auth user is created.
 6. Create a restaurant account through `/register`. The new tenant starts as `trial`, so activate it before its QR menu can accept orders:
 
