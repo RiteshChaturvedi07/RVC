@@ -8,6 +8,10 @@
 6. Run `migrations/202608060005_restaurant_management.sql` once. It activates real restaurant inventory, promotions, settings, and restaurant-created support tickets.
 7. If a QR menu remains on the loading screen or Supabase reports the function missing, run `migrations/202608060006_repair_public_qr_menu.sql` once. It recreates and reloads the public menu API endpoint.
 8. Run `migrations/202608060008_fix_public_order_lock.sql`, `202608060009_customer_order_tracking.sql`, and `202608060010_restaurant_media_and_sessions.sql` in order for payment settlement, customer tracking, menu image uploads, and service controls.
+9. Run `migrations/202608060011_trial_restaurant_access.sql` and then `migrations/202608060012_order_lifecycle_and_upi.sql`. Migration 012 adds table clearance, guest names, merchant UPI setup, and durable customer receipts.
+10. If Supabase says either `clear_restaurant_table` or the five-argument `create_public_restaurant_order` function is missing, run `migrations/202608060013_repair_restaurant_rpcs.sql` and wait 15 seconds for the API schema cache to reload.
+11. Run `migrations/202608060014_restaurant_staff_management.sql` to enable the Staff workspace add/remove buttons.
+12. If Settings displays “Unable to load”, run `migrations/202608060015_backfill_restaurant_settings.sql` to create any missing restaurant-settings rows for existing accounts.
 7. In **Authentication → Providers → Email**, configure your production site URL and redirect URLs. Email confirmation may remain enabled; the tenant is created safely when the auth user is created.
 6. Create a restaurant account through `/register`. The new tenant starts as `trial`, so activate it before its QR menu can accept orders:
 
