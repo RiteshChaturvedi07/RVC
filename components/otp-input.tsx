@@ -48,7 +48,7 @@ export function OTPInput({ length = 6, value, onChange, onComplete }: OTPInputPr
     }
 
     // Call onComplete when all digits are filled
-    if (newValue.length === length && newValue === newValue.replace(/./g, (c) => c !== '' ? '.' : '')) {
+    if (newValue.length === length && /^\d{6}$/.test(newValue)) {
       onComplete?.(newValue)
     }
   }

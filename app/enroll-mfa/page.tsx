@@ -20,43 +20,69 @@ export default function EnrollMFAPage() {
   const [otp, setOtp] = useState('')
   const [error, setError] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
+  const qrSource = qrCode.startsWith('<svg') ? `data:image/svg+xml;utf8,${encodeURIComponent(qrCode)}` : qrCode
+
+  const redirectByProfile = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const { data: profile } = await supabase.from('profiles').select('role, tenant_id').eq('id', userData.user?.id).single()
+    if (profile?.role === 'super_admin') { router.push('/rvc-control-9x2f/dashboard'); return }
+    if (profile?.tenant_id) {
+      const { data: tenant } = await supabase.from('tenants').select('vertical').eq('id', profile.tenant_id).single()
+      router.push(tenant?.vertical === 'restaurant' ? '/restaurant-dashboard' : '/coming-soon')
+      return
+    }
+    router.push('/dashboard')
+  }
 
   useEffect(() => {
     const startEnrollment = async () => {
-      const { data: userData } = await supabase.auth.getUser()
-      if (!userData.user) {
-        router.push('/login')
-        return
-      }
+      try {
+        const { data: userData, error: userError } = await supabase.auth.getUser()
+        if (userError) throw userError
+        if (!userData.user) {
+          router.push('/login')
+          return
+        }
 
-      // If they already have a verified TOTP factor, no need to enroll again
-      const { data: factors } = await supabase.auth.mfa.listFactors()
-      if (factors?.totp && factors.totp.length > 0) {
-        router.push('/dashboard')
-        return
-      }
+        const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors()
+        if (factorsError) throw factorsError
+        const existingFactor = factors?.totp?.[0]
 
-      const { data, error: enrollError } = await supabase.auth.mfa.enroll({
-        factorType: 'totp',
-      })
+        if (existingFactor) {
+          // A verified factor only needs an AAL2 challenge, not another enrolment.
+          if (existingFactor.status === 'verified') {
+            setFactorId(existingFactor.id)
+            setStep('verify')
+            return
+          }
 
-      if (enrollError) {
-        setError(enrollError.message)
+          // Supabase will reject another enrolment with the same empty/default
+          // friendly name. Remove incomplete factors before creating a fresh one.
+          const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId: existingFactor.id })
+          if (unenrollError) throw unenrollError
+        }
+
+        const { data, error: enrollError } = await supabase.auth.mfa.enroll({
+          factorType: 'totp',
+          friendlyName: 'RVC Authenticator',
+        })
+        if (enrollError) throw enrollError
+
+        setFactorId(data.id)
+        setQrCode(data.totp.qr_code)
+        setSecret(data.totp.secret)
+        setStep('scan')
+      } catch (enrollmentError) {
+        setError(enrollmentError instanceof Error ? enrollmentError.message : 'Unable to set up two-factor authentication. Please try again.')
         setStep('error')
-        return
       }
-
-      setFactorId(data.id)
-      setQrCode(data.totp.qr_code)
-      setSecret(data.totp.secret)
-      setStep('scan')
     }
 
     startEnrollment()
   }, [])
 
-  const handleVerify = async () => {
-    if (otp.length !== 6) {
+  const handleVerify = async (code: string = otp) => {
+    if (code.length !== 6) {
       setError('Please enter a valid 6-digit code')
       return
     }
@@ -77,7 +103,7 @@ export default function EnrollMFAPage() {
     const { error: verifyError } = await supabase.auth.mfa.verify({
       factorId,
       challengeId: challenge.id,
-      code: otp,
+      code,
     })
 
     if (verifyError) {
@@ -86,7 +112,7 @@ export default function EnrollMFAPage() {
       return
     }
 
-    router.push('/dashboard')
+    await redirectByProfile()
   }
 
   return (
@@ -117,41 +143,42 @@ export default function EnrollMFAPage() {
             </>
           )}
 
-          {step === 'scan' && (
+          {(step === 'scan' || step === 'verify') && (
             <>
               <h2 className="text-2xl font-bold text-center text-slate-900 dark:text-white mb-2">
-                Set Up Two-Factor Authentication
+                {step === 'scan' ? 'Set Up Two-Factor Authentication' : 'Verify Two-Factor Authentication'}
               </h2>
-              <p className="text-center text-slate-600 dark:text-slate-300 mb-6 text-sm">
+              {step === 'scan' && <p className="text-center text-slate-600 dark:text-slate-300 mb-6 text-sm">
                 Scan this QR code with Google Authenticator, Authy, or any TOTP app
-              </p>
+              </p>}
 
-              <div
-                className="flex justify-center mb-4 bg-white p-4 rounded-lg"
-                dangerouslySetInnerHTML={{ __html: qrCode }}
-              />
+              {step === 'scan' && qrCode && (
+                <div className="flex justify-center mb-4 rounded-lg bg-white p-4">
+                  <img src={qrSource} alt="Scan this QR code in your authenticator app" className="size-52" />
+                </div>
+              )}
 
-              <details className="mb-6">
+              {step === 'scan' && <details className="mb-6">
                 <summary className="text-xs text-center text-indigo-600 dark:text-indigo-400 cursor-pointer">
                   Can't scan? Enter code manually
                 </summary>
                 <p className="text-xs text-center text-slate-500 dark:text-slate-400 mt-2 break-all font-mono">
                   {secret}
                 </p>
-              </details>
+              </details>}
 
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 text-center">
                 Enter the 6-digit code from your app to confirm
               </p>
 
               <div className="mb-4">
-                <OTPInput length={6} value={otp} onChange={setOtp} onComplete={() => {}} />
+                <OTPInput length={6} value={otp} onChange={setOtp} onComplete={handleVerify} />
               </div>
 
               {error && <p className="text-red-500 text-sm text-center mb-4">{error}</p>}
 
               <button
-                onClick={handleVerify}
+                onClick={() => handleVerify()}
                 disabled={isVerifying || otp.length !== 6}
                 className="w-full px-6 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors disabled:cursor-not-allowed"
               >

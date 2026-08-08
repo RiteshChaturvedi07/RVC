@@ -22,6 +22,18 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [mfaFactorId, setMfaFactorId] = useState('')
 
+  const redirectByProfile = async () => {
+    const { data: userData } = await supabase.auth.getUser()
+    const { data: profile } = await supabase.from('profiles').select('role, tenant_id').eq('id', userData.user?.id).single()
+    if (profile?.role === 'super_admin') { router.push('/rvc-control-9x2f/dashboard'); return }
+    if (profile?.tenant_id) {
+      const { data: tenant } = await supabase.from('tenants').select('vertical').eq('id', profile.tenant_id).single()
+      router.push(tenant?.vertical === 'restaurant' ? '/restaurant-dashboard' : '/coming-soon')
+      return
+    }
+    router.push('/dashboard')
+  }
+
   const validateCredentials = (): boolean => {
     const newErrors: Record<string, string> = {}
 
@@ -54,36 +66,33 @@ export default function LoginPage() {
       return
     }
 
-    /* MFA Bypassed temporarily for fast local development
-    // Check if this account has an MFA factor enrolled
-    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-
-    if (aal?.nextLevel === 'aal2' && aal.nextLevel !== aal.currentLevel) {
-      const { data: factors } = await supabase.auth.mfa.listFactors()
+    try {
+      const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+      if (aalError) throw aalError
+      const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors()
+      if (factorsError) throw factorsError
       const totpFactor = factors?.totp?.[0]
 
-      if (totpFactor) {
-        setMfaFactorId(totpFactor.id)
-        setStep('otp')
+      // Every dashboard account must enrol a TOTP factor before it can enter
+      // the application. Existing factors must also complete AAL2 on login.
+      if (!totpFactor) {
         setIsLoading(false)
+        router.push('/enroll-mfa')
         return
       }
-    }
 
-    // No MFA enrolled yet — send them to set it up before entering the dashboard
-    setIsLoading(false)
-    router.push('/enroll-mfa')
-    */
-
-    const { data: userData } = await supabase.auth.getUser()
-    const { data: profile } = await supabase.from('profiles').select('role, tenant_id').eq('id', userData.user?.id).single()
-    setIsLoading(false)
-    if (profile?.role === 'super_admin') router.push('/rvc-control-9x2f/dashboard')
-    else if (profile?.tenant_id) {
-      const { data: tenant } = await supabase.from('tenants').select('vertical').eq('id', profile.tenant_id).single()
-      router.push(tenant?.vertical === 'restaurant' ? '/restaurant-dashboard' : '/coming-soon')
+      if (aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+        setIsLoading(false)
+        setMfaFactorId(totpFactor.id)
+        setStep('otp')
+        return
+      }
+      setIsLoading(false)
+      await redirectByProfile()
+    } catch (mfaError) {
+      setErrors({ password: mfaError instanceof Error ? `MFA check failed: ${mfaError.message}` : 'Unable to verify multi-factor authentication.' })
+      setIsLoading(false)
     }
-    else router.push('/dashboard')
   }
 
   const handleOTPComplete = (otpValue: string) => {
@@ -123,7 +132,7 @@ export default function LoginPage() {
     }
 
     setIsLoading(false)
-    router.push('/dashboard')
+    await redirectByProfile()
   }
 
   const stepVariants = {
