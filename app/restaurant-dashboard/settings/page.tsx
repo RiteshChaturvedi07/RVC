@@ -1,2 +1,2 @@
-import { RestaurantSettings } from '@/components/restaurant/restaurant-modules'
+import { RestaurantSettings } from '@/components/restaurant/restaurant-settings'
 export default function RestaurantSettingsPage() { return <RestaurantSettings /> }
