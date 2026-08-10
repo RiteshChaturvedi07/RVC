@@ -1,2 +1,2 @@
-import { RestaurantOrdersTable } from '@/components/restaurant/restaurant-workspaces'
-export default function RestaurantOrdersPage() { return <RestaurantOrdersTable /> }
+import { RestaurantOrders } from '@/components/restaurant/restaurant-orders'
+export default function RestaurantOrdersPage() { return <RestaurantOrders /> }

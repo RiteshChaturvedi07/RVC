@@ -1,2 +1,2 @@
-import { RestaurantTablesBoard } from '@/components/restaurant/restaurant-workspaces'
-export default function RestaurantTablesPage() { return <RestaurantTablesBoard /> }
+import { RestaurantTables } from '@/components/restaurant/restaurant-tables'
+export default function RestaurantTablesPage() { return <RestaurantTables /> }
