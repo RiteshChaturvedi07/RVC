@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ShieldCheck } from 'lucide-react'
@@ -20,6 +20,7 @@ export default function EnrollMFAPage() {
   const [otp, setOtp] = useState('')
   const [error, setError] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
+  const enrollmentStarted = useRef(false)
   const qrSource = qrCode.startsWith('<svg') ? `data:image/svg+xml;utf8,${encodeURIComponent(qrCode)}` : qrCode
 
   const redirectByProfile = async () => {
@@ -36,6 +37,10 @@ export default function EnrollMFAPage() {
 
   useEffect(() => {
     const startEnrollment = async () => {
+      // React development mode can run effects twice. Without this guard the
+      // second request creates a duplicate friendly-name enrolment error.
+      if (enrollmentStarted.current) return
+      enrollmentStarted.current = true
       try {
         const { data: userData, error: userError } = await supabase.auth.getUser()
         if (userError) throw userError
@@ -46,7 +51,7 @@ export default function EnrollMFAPage() {
 
         const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors()
         if (factorsError) throw factorsError
-        const existingFactor = factors?.totp?.[0]
+        const existingFactor = factors?.all?.find((factor) => factor.factor_type === 'totp') ?? factors?.totp?.[0]
 
         if (existingFactor) {
           // A verified factor only needs an AAL2 challenge, not another enrolment.
@@ -66,7 +71,24 @@ export default function EnrollMFAPage() {
           factorType: 'totp',
           friendlyName: 'RVC Authenticator',
         })
-        if (enrollError) throw enrollError
+        if (enrollError) {
+          // A factor may have been created by an earlier request but not yet
+          // been returned by listFactors. Re-read it and continue securely.
+          if (enrollError.message.includes('already exists')) {
+            const { data: retryFactors, error: retryError } = await supabase.auth.mfa.listFactors()
+            if (retryError) throw retryError
+            const retryFactor = retryFactors?.all?.find((factor) => factor.factor_type === 'totp') ?? retryFactors?.totp?.[0]
+            if (retryFactor?.status === 'verified') { setFactorId(retryFactor.id); setStep('verify'); return }
+            if (retryFactor) {
+              const { error: cleanupError } = await supabase.auth.mfa.unenroll({ factorId: retryFactor.id })
+              if (cleanupError) throw cleanupError
+              const { data: fresh, error: freshError } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'RVC Authenticator' })
+              if (freshError) throw freshError
+              setFactorId(fresh.id); setQrCode(fresh.totp.qr_code); setSecret(fresh.totp.secret); setStep('scan'); return
+            }
+          }
+          throw enrollError
+        }
 
         setFactorId(data.id)
         setQrCode(data.totp.qr_code)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
@@ -21,6 +21,7 @@ const PLANS = [
   { id: 'growth', name: 'Growth', price: '₹2,999', features: ['Up to 500 users', 'Advanced features', 'Priority support', 'Custom branding'], popular: true },
   { id: 'pro', name: 'Pro', price: '₹9,999', features: ['Unlimited users', 'All features', '24/7 support', 'API access', 'Custom integrations'] },
 ]
+type SaaSPlan = { id:string; name:string; slug:string; price_monthly:number; price_yearly:number; features:string[]; is_popular:boolean }
 
 type FormData = {
   businessType: string
@@ -54,6 +55,9 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState<FormErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [plans, setPlans] = useState<SaaSPlan[]>([])
+
+  useEffect(() => { supabase.rpc('get_active_saas_plans').then(({ data }) => { if (data) setPlans(data as SaaSPlan[]) }) }, [])
 
   const validateStep = (stepNum: number): boolean => {
     const newErrors: FormErrors = {}
@@ -123,6 +127,8 @@ export default function RegisterPage() {
             business_name: formData.businessName,
             business_type: formData.businessType,
             plan: formData.plan,
+            plan_id: formData.plan,
+            plan_billing_cycle: 'monthly',
           },
         },
       })
@@ -292,7 +298,7 @@ export default function RegisterPage() {
                 <p className="text-slate-600 dark:text-slate-300 mb-8">Select the perfect plan for your business</p>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                  {PLANS.map((plan) => (
+                  {(plans.length ? plans : PLANS.map((plan,index) => ({ ...plan, id: plan.id, price_monthly: Number(plan.price.replace(/[^0-9]/g,'')), features: plan.features, is_popular: !!plan.popular }))).map((plan) => (
                     <motion.button
                       key={plan.id}
                       type="button"
@@ -312,7 +318,7 @@ export default function RegisterPage() {
                       )}
                       <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{plan.name}</h3>
                       <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">
-                        {plan.price}
+                        {'₹'}{Number(plan.price_monthly).toLocaleString('en-IN')}
                         <span className="text-sm text-slate-600 dark:text-slate-400">/month</span>
                       </p>
                       <ul className="space-y-2">

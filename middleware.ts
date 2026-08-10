@@ -39,8 +39,9 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/rvc-control-9x2f/dashboard') && profile.role !== 'super_admin') return NextResponse.redirect(new URL('/login', request.url))
   if (pathname.startsWith('/restaurant-dashboard')) {
     if (!profile.tenant_id || !['tenant_owner', 'staff'].includes(profile.role)) return NextResponse.redirect(new URL('/login', request.url))
-    const { data: tenant } = await supabase.from('tenants').select('vertical').eq('id', profile.tenant_id).single()
+    const { data: tenant } = await supabase.from('tenants').select('vertical,status').eq('id', profile.tenant_id).single()
     if (tenant?.vertical !== 'restaurant') return NextResponse.redirect(new URL('/coming-soon', request.url))
+    if (tenant?.status === 'pending') return NextResponse.redirect(new URL('/approval-pending', request.url))
   }
   return response
 }

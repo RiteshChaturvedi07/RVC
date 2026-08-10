@@ -1,5 +1,6 @@
 import { RestaurantShell } from '@/components/restaurant/restaurant-shell'
+import { RestaurantSubscriptionGuard } from '@/components/restaurant/subscription-guard'
 
 export default function RestaurantDashboardLayout({ children }: { children: React.ReactNode }) {
-  return <RestaurantShell>{children}</RestaurantShell>
+  return <RestaurantShell><RestaurantSubscriptionGuard>{children}</RestaurantSubscriptionGuard></RestaurantShell>
 }

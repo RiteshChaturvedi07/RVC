@@ -35,6 +35,7 @@ const sections = [
     items: [
       { label: 'Overview', href: '/rvc-control-9x2f/dashboard', icon: LayoutDashboard },
       { label: 'Tenants', href: '/rvc-control-9x2f/dashboard/tenants', icon: Building2 },
+      { label: 'SaaS Plans', href: '/rvc-control-9x2f/dashboard/plans', icon: CreditCard },
       { label: 'Billing & Plans', href: '/rvc-control-9x2f/dashboard/billing', icon: CreditCard },
       { label: 'Support', href: '/rvc-control-9x2f/dashboard/support', icon: CircleHelp },
     ],
