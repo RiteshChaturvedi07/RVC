@@ -311,7 +311,7 @@ export default function RegisterPage() {
                           : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600'
                       }`}
                     >
-                      {plan.popular && (
+                      {plan.is_popular && (
                         <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-semibold">
                           Most Popular
                         </div>
