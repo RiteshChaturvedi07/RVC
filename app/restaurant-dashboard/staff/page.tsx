@@ -1,2 +1,2 @@
-import { RestaurantStaff } from '@/components/restaurant/restaurant-modules'
+import { RestaurantStaff } from '@/components/restaurant/restaurant-staff'
 export default function RestaurantStaffPage() { return <RestaurantStaff /> }

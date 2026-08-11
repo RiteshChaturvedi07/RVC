@@ -1,2 +1,2 @@
-import { WorkspacePanel } from '@/components/rvc-admin/workspace-panel'
-export default function BillingPage() { return <WorkspacePanel kind="billing" /> }
+import { PaymentVerification } from '@/components/rvc-admin/payment-verification'
+export default function BillingPage() { return <PaymentVerification /> }
