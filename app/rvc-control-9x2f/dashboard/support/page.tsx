@@ -1,2 +1,2 @@
-import { WorkspacePanel } from '@/components/rvc-admin/workspace-panel'
-export default function SupportPage() { return <WorkspacePanel kind="support" /> }
+import { SupportCenter } from '@/components/rvc-admin/support-center'
+export default function SupportPage() { return <SupportCenter /> }

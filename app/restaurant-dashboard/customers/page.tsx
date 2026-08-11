@@ -1,2 +1,2 @@
-import { RestaurantCustomers } from '@/components/restaurant/restaurant-modules'
+import { RestaurantCustomers } from '@/components/restaurant/restaurant-customers'
 export default function RestaurantCustomersPage() { return <RestaurantCustomers /> }

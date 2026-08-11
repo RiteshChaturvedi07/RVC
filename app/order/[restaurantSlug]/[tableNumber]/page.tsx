@@ -21,7 +21,8 @@ export default function OrderPage(){
  const subtotal=selected.reduce((sum,item)=>sum+item.price*cart[item.id],0)
  const tax=Math.round((subtotal-discount)*(menu?.restaurant.tax_rate??0))/100
  const total=Math.max(0,subtotal-discount+tax)
- const sessionTotal=orders.reduce((sum,order)=>sum+Number(order.total),0)
+ const liveOrders=orders.filter(order=>order.payment_status!=='paid'&&!['completed','closed'].includes(order.status))
+ const sessionTotal=liveOrders.reduce((sum,order)=>sum+Number(order.total),0)
  const change=(id:string,by:number)=>setCart(value=>({...value,[id]:Math.max(0,(value[id]||0)+by)}))
  const applyCoupon=async()=>{if(!menu||!coupon.trim())return;setCouponBusy(true);setCouponMessage('');const{data,error}=await db.rpc('public_validate_restaurant_coupon',{p_table_token:menu.table.token,p_code:coupon,p_subtotal:subtotal});setCouponBusy(false);if(error||!data?.valid){setDiscount(0);setCouponMessage(data?.message||error?.message||'Coupon could not be applied');return}setDiscount(Number(data.discount||0));setCouponMessage(data.message||'Coupon applied')}
  const place=async()=>{if(!menu)return;const{error}=await db.rpc('create_public_restaurant_order',{p_table_token:menu.table.token,p_customer_phone:phone,p_customer_name:name,p_items:selected.map(item=>({id:item.id,quantity:cart[item.id]})),p_notes:null,p_coupon_code:coupon.trim()||null});if(error)return alert(error.message);setCart({});setCartOpen(false);setTracking(true)}
