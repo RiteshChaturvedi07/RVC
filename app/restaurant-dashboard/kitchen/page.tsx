@@ -1,2 +1,2 @@
-import { RestaurantKitchenBoard } from '@/components/restaurant/restaurant-workspaces'
-export default function RestaurantKitchenPage() { return <RestaurantKitchenBoard /> }
+import { RestaurantKitchen } from '@/components/restaurant/restaurant-kitchen'
+export default function RestaurantKitchenPage() { return <RestaurantKitchen /> }
