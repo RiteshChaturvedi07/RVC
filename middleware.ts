@@ -30,13 +30,13 @@ export async function middleware(request: NextRequest) {
   const { data: profile } = await supabase.from('profiles').select('role, tenant_id').eq('id', user.id).single()
   if (!profile) return NextResponse.redirect(new URL('/login', request.url))
 
-  const { data: factors } = await supabase.auth.mfa.listFactors()
-  if (!factors?.totp?.length) return NextResponse.redirect(new URL('/enroll-mfa', request.url))
-
-  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-  if (aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') return NextResponse.redirect(new URL('/enroll-mfa', request.url))
-
-  if (pathname.startsWith('/rvc-control-9x2f/dashboard') && profile.role !== 'super_admin') return NextResponse.redirect(new URL('/login', request.url))
+  if (pathname.startsWith('/rvc-control-9x2f/dashboard')) {
+    if (profile.role !== 'super_admin') return NextResponse.redirect(new URL('/login', request.url))
+    const { data: factors } = await supabase.auth.mfa.listFactors()
+    if (!factors?.totp?.length) return NextResponse.redirect(new URL('/enroll-mfa', request.url))
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    if (aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') return NextResponse.redirect(new URL('/enroll-mfa', request.url))
+  }
   if (pathname.startsWith('/restaurant-dashboard')) {
     if (!profile.tenant_id || !['tenant_owner', 'staff'].includes(profile.role)) return NextResponse.redirect(new URL('/login', request.url))
     const { data: tenant } = await supabase.from('tenants').select('vertical,status').eq('id', profile.tenant_id).single()

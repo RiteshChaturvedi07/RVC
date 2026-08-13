@@ -119,6 +119,9 @@ export default function RegisterPage() {
         email: formData.email,
         password: formData.password,
         options: {
+          // With "Confirm email" enabled in Supabase, this sends the new
+          // restaurant owner a secure verification link to this address.
+          emailRedirectTo: `${window.location.origin}/login?email_confirmed=1`,
           // The database trigger creates the tenant and owner profile atomically.
           // Keeping these values in auth metadata avoids browser-side role assignment.
           data: {

@@ -84,6 +84,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       if (!userData.user) { router.replace('/rvc-control-9x2f'); return }
       const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', userData.user.id).single()
       if (profile?.role !== 'super_admin') { await supabase.auth.signOut(); router.replace('/rvc-control-9x2f'); return }
+      const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+      if (assuranceError || (assurance?.nextLevel === 'aal2' && assurance.currentLevel !== 'aal2')) { router.replace('/enroll-mfa'); return }
       setAdminName(profile.full_name || 'Administrator')
       setCheckingAccess(false)
     }

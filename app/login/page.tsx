@@ -5,27 +5,21 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Eye, EyeOff } from 'lucide-react'
-import { OTPInput } from '@/components/otp-input'
 import { createClient } from '@/lib/supabase/client'
-
-type LoginStep = 'credentials' | 'otp'
 
 export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
-  const [step, setStep] = useState<LoginStep>('credentials')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [otp, setOtp] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
-  const [mfaFactorId, setMfaFactorId] = useState('')
 
   const redirectByProfile = async () => {
     const { data: userData } = await supabase.auth.getUser()
     const { data: profile } = await supabase.from('profiles').select('role, tenant_id').eq('id', userData.user?.id).single()
-    if (profile?.role === 'super_admin') { router.push('/rvc-control-9x2f/dashboard'); return }
+    if (profile?.role === 'super_admin') { await supabase.auth.signOut(); router.push('/rvc-control-9x2f'); return }
     if (profile?.tenant_id) {
       const { data: tenant } = await supabase.from('tenants').select('vertical').eq('id', profile.tenant_id).single()
       router.push(tenant?.vertical === 'restaurant' ? '/restaurant-dashboard' : '/coming-soon')
@@ -66,71 +60,6 @@ export default function LoginPage() {
       return
     }
 
-    try {
-      const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-      if (aalError) throw aalError
-      const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors()
-      if (factorsError) throw factorsError
-      const totpFactor = factors?.totp?.[0]
-
-      // Every dashboard account must enrol a TOTP factor before it can enter
-      // the application. Existing factors must also complete AAL2 on login.
-      if (!totpFactor) {
-        setIsLoading(false)
-        router.push('/enroll-mfa')
-        return
-      }
-
-      if (aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
-        setIsLoading(false)
-        setMfaFactorId(totpFactor.id)
-        setStep('otp')
-        return
-      }
-      setIsLoading(false)
-      await redirectByProfile()
-    } catch (mfaError) {
-      setErrors({ password: mfaError instanceof Error ? `MFA check failed: ${mfaError.message}` : 'Unable to verify multi-factor authentication.' })
-      setIsLoading(false)
-    }
-  }
-
-  const handleOTPComplete = (otpValue: string) => {
-    if (otpValue.length === 6) {
-      handleOTPSubmit(otpValue)
-    }
-  }
-
-  const handleOTPSubmit = async (otpValue: string = otp) => {
-    if (otpValue.length !== 6) {
-      setErrors({ otp: 'Please enter a valid 6-digit code' })
-      return
-    }
-
-    setIsLoading(true)
-
-    const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({
-      factorId: mfaFactorId,
-    })
-
-    if (challengeError) {
-      setErrors({ otp: challengeError.message })
-      setIsLoading(false)
-      return
-    }
-
-    const { error: verifyError } = await supabase.auth.mfa.verify({
-      factorId: mfaFactorId,
-      challengeId: challenge.id,
-      code: otpValue,
-    })
-
-    if (verifyError) {
-      setErrors({ otp: 'Incorrect code. Please try again.' })
-      setIsLoading(false)
-      return
-    }
-
     setIsLoading(false)
     await redirectByProfile()
   }
@@ -150,12 +79,11 @@ export default function LoginPage() {
           exit="exit"
           variants={stepVariants}
           transition={{ duration: 0.3 }}
-          key={step}
+          key="credentials"
           className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8"
         >
           {/* Credentials Step */}
-          {step === 'credentials' && (
-            <>
+          <>
               <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Welcome Back</h2>
               <p className="text-slate-600 dark:text-slate-300 mb-8">Log in to your RVC account</p>
 
@@ -233,53 +161,6 @@ export default function LoginPage() {
                 </button>
               </form>
             </>
-          )}
-
-          {/* OTP Step */}
-          {step === 'otp' && (
-            <>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Verify with 2FA</h2>
-              <p className="text-slate-600 dark:text-slate-300 mb-8">
-                Enter the 6-digit code from your authenticator app
-              </p>
-
-              <div className="mb-8">
-                <OTPInput
-                  length={6}
-                  value={otp}
-                  onChange={setOtp}
-                  onComplete={handleOTPComplete}
-                />
-                {errors.otp && (
-                  <p className="text-red-500 text-sm mt-4 text-center">{errors.otp}</p>
-                )}
-              </div>
-
-              <button
-                onClick={() => handleOTPSubmit()}
-                disabled={isLoading || otp.length !== 6}
-                className="w-full px-6 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors disabled:cursor-not-allowed mb-4"
-              >
-                {isLoading ? 'Verifying...' : 'Verify & Login'}
-              </button>
-
-              <div className="text-center">
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Codes refresh automatically every 30 seconds in your authenticator app.
-                </p>
-              </div>
-
-              <button
-                onClick={() => {
-                  setStep('credentials')
-                  setErrors({})
-                }}
-                className="w-full mt-4 px-6 py-2 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 font-medium rounded-lg transition-colors"
-              >
-                Use Different Email
-              </button>
-            </>
-          )}
         </motion.div>
 
         {/* Sign Up Link */}
