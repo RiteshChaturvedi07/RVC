@@ -1,7 +1,312 @@
 'use client'
+
 import { useEffect, useState } from 'react'
-import { CheckCircle2, QrCode, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { AlertCircle, CheckCircle2, QrCode, ShieldCheck, Sparkles, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { currentRestaurantTenant } from '@/lib/restaurant'
-type Plan={id:string;name:string;price_monthly:number;price_yearly:number;features:string[];is_popular:boolean};type Request={id:string;amount:number;billing_cycle:string;utr_reference:string;status:string;created_at:string;saas_plans:{name:string}|null};const money=(n:number)=>`₹${Number(n).toLocaleString('en-IN',{minimumFractionDigits:2})}`
-export function RestaurantBilling(){const db=createClient(),[tenant,setTenant]=useState<any>(null),[plans,setPlans]=useState<Plan[]>([]),[requests,setRequests]=useState<Request[]>([]),[payment,setPayment]=useState<any>(null),[chosen,setChosen]=useState<Plan|null>(null),[cycle,setCycle]=useState<'monthly'|'yearly'>('monthly'),[utr,setUtr]=useState(''),[notice,setNotice]=useState('');const load=async()=>{const id=await currentRestaurantTenant(),[a,b,c,d]=await Promise.all([db.from('tenants').select('status,subscription_status,subscription_expires_at,subscription_end_date,plan_id,saas_plans(name,features)').eq('id',id).single(),db.rpc('get_active_saas_plans'),db.from('subscription_payment_requests').select('*,saas_plans(name)').eq('tenant_id',id).order('created_at',{ascending:false}),db.rpc('get_platform_payment_settings')]);setTenant(a.data);setPlans((b.data??[])as Plan[]);setRequests((c.data??[])as Request[]);setPayment(d.data)};useEffect(()=>{void load()},[]);if(!tenant)return <div className="rounded-2xl border p-8">Loading billing…</div>;const expiry=tenant.subscription_expires_at||tenant.subscription_end_date?new Date(tenant.subscription_expires_at||tenant.subscription_end_date):null,days=expiry?Math.ceil((expiry.getTime()-Date.now())/86400000):null,status=days!==null&&days<0?'Expired':days!==null&&days<=7?'Expiring soon':tenant.subscription_status||tenant.status,amount=chosen?(cycle==='monthly'?chosen.price_monthly:chosen.price_yearly):0;const submit=async()=>{if(!chosen||!utr.trim())return setNotice('Enter UTR / transaction reference.');const id=await currentRestaurantTenant(),{error}=await db.from('subscription_payment_requests').insert({tenant_id:id,plan_id:chosen.id,amount,billing_cycle:cycle,utr_reference:utr.trim()});if(error)setNotice(error.message);else{setChosen(null);setUtr('');setNotice('Payment submitted for admin verification.');void load()}};return <div className="space-y-6"><div><h2 className="text-3xl font-semibold">Subscription & billing</h2><p className="text-muted-foreground">Manage your plan and submit renewal payments.</p></div>{notice&&<p className="rounded-xl bg-primary/10 p-3 text-primary">{notice}</p>}<section className="rounded-2xl border bg-card p-6"><div className="flex flex-wrap justify-between gap-4"><div><p className="text-sm text-muted-foreground">Current plan</p><h3 className="mt-1 text-2xl font-bold">{tenant.saas_plans?.name||'Trial'}</h3><p className="mt-3"><span className={`rounded-full px-2 py-1 text-sm ${status==='Expired'?'bg-red-100 text-red-700':status==='Expiring soon'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700'}`}>{status}</span></p></div><div className="text-right"><p className="text-sm text-muted-foreground">Exact expiry</p><b>{expiry?expiry.toLocaleString('en-IN'):'Not set'}</b><p className="mt-1 text-sm">{days===null?'Contact RVC support':days<0?'Renew to restore access':`${days} days remaining`}</p></div></div>{days!==null&&<div className="mt-5 h-2 overflow-hidden rounded bg-muted"><i className={`block h-full ${days<0?'bg-red-500':days<=7?'bg-amber-500':'bg-emerald-500'}`} style={{width:`${Math.max(0,Math.min(100,days/30*100))}%`}}/></div>}</section><h3 className="text-xl font-semibold">Available plans</h3><div className="grid gap-4 md:grid-cols-3">{plans.map(plan=>{const current=plan.id===tenant.plan_id;return <article key={plan.id} className={`rounded-2xl border bg-card p-5 ${plan.is_popular?'border-primary':''}`}><div className="flex justify-between"><b>{plan.name}</b>{plan.is_popular&&<span className="text-primary"><Sparkles className="inline size-4"/>Popular</span>}</div><p className="mt-3 text-2xl font-bold">{money(plan.price_monthly)}<small className="text-sm font-normal">/month</small></p><p className="text-sm text-muted-foreground">{money(plan.price_yearly)}/year</p><ul className="mt-4 space-y-2 text-sm">{(plan.features||[]).map(feature=><li key={feature}><CheckCircle2 className="mr-1 inline size-4 text-emerald-600"/>{feature}</li>)}</ul><button onClick={()=>{setChosen(plan);setCycle('monthly')}} className="mt-5 w-full rounded-xl bg-primary py-2.5 text-primary-foreground">{current?'Renew plan':`Upgrade to ${plan.name}`}</button></article>})}</div><section className="overflow-x-auto rounded-2xl border bg-card"><div className="border-b p-4"><h3 className="font-semibold">Billing history</h3></div><table className="w-full min-w-[650px] text-sm"><thead className="bg-muted/50 text-left text-xs"><tr><th className="p-4">Plan</th><th>UTR reference</th><th>Payment date</th><th>Amount</th><th>Status</th></tr></thead><tbody>{requests.map(r=><tr key={r.id} className="border-t"><td className="p-4">{r.saas_plans?.name||'Plan'}</td><td>{r.utr_reference}</td><td>{new Date(r.created_at).toLocaleString('en-IN')}</td><td>{money(r.amount)}</td><td className={r.status==='paid'?'text-emerald-600':'text-amber-600'}>{r.status==='paid'?'Paid':'Pending verification'}</td></tr>)}</tbody></table>{!requests.length&&<p className="p-8 text-center text-muted-foreground">No renewal requests yet.</p>}</section>{chosen&&<div className="fixed inset-0 z-[90] grid place-items-center bg-black/50 p-4"><section className="w-full max-w-md rounded-2xl bg-card p-6"><button onClick={()=>setChosen(null)} className="float-right"><X/></button><h3 className="text-xl font-bold">{chosen.name} renewal</h3><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={()=>setCycle('monthly')} className={`rounded-lg p-2 ${cycle==='monthly'?'bg-primary text-primary-foreground':'bg-muted'}`}>Monthly {money(chosen.price_monthly)}</button><button type="button" onClick={()=>setCycle('yearly')} className={`rounded-lg p-2 ${cycle==='yearly'?'bg-primary text-primary-foreground':'bg-muted'}`}>Yearly {money(chosen.price_yearly)}</button></div><p className="mt-2 text-center text-sm">Selected: <b>{cycle==='monthly'?'Monthly · 30 days':'Yearly · 365 days'}</b> · <b>{money(amount)}</b></p><div className="mt-4 rounded-xl bg-muted p-4 text-center">{payment?.rvc_upi_qr_url?<img src={payment.rvc_upi_qr_url} alt="RVC UPI QR" className="mx-auto size-40 object-contain"/>:<QrCode className="mx-auto size-24 text-muted-foreground"/>}<p className="mt-2"><b>UPI:</b> {payment?.rvc_upi_id||'UPI details are being configured.'}</p></div><input value={utr} onChange={e=>setUtr(e.target.value)} placeholder="UTR / transaction reference number" className="mt-4 w-full rounded-xl border p-3"/><button onClick={()=>void submit()} className="mt-3 w-full rounded-xl bg-primary py-3 text-primary-foreground"><ShieldCheck className="mr-1 inline size-4"/>Submit for admin approval</button></section></div>}</div>}
+
+type Plan = {
+  id: string
+  name: string
+  price_monthly: number
+  price_yearly: number
+  features: string[]
+  is_popular: boolean
+}
+
+type Request = {
+  id: string
+  amount: number
+  billing_cycle: string
+  utr_reference: string
+  status: 'pending' | 'paid' | 'rejected' | string
+  rejection_note?: string | null
+  created_at: string
+  saas_plans: { name: string } | null
+}
+
+const money = (n: number) => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+
+export function RestaurantBilling() {
+  const db = createClient()
+  const [tenant, setTenant] = useState<any>(null)
+  const [plans, setPlans] = useState<Plan[]>([])
+  const [requests, setRequests] = useState<Request[]>([])
+  const [payment, setPayment] = useState<any>(null)
+  const [chosen, setChosen] = useState<Plan | null>(null)
+  const [cycle, setCycle] = useState<'monthly' | 'yearly'>('monthly')
+  const [utr, setUtr] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const load = async () => {
+    const id = await currentRestaurantTenant()
+    const [a, b, c, d] = await Promise.all([
+      db
+        .from('tenants')
+        .select('status,subscription_status,subscription_expires_at,subscription_end_date,plan_id,saas_plans(name,features)')
+        .eq('id', id)
+        .single(),
+      db.rpc('get_active_saas_plans'),
+      db
+        .from('subscription_payment_requests')
+        .select('*,saas_plans(name)')
+        .eq('tenant_id', id)
+        .order('created_at', { ascending: false }),
+      db.rpc('get_platform_payment_settings'),
+    ])
+
+    setTenant(a.data)
+    setPlans((b.data ?? []) as Plan[])
+    setRequests((c.data ?? []) as Request[])
+    setPayment(d.data)
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  if (!tenant) return <div className="rounded-2xl border p-8">Loading billing…</div>
+
+  const expiry = tenant.subscription_expires_at || tenant.subscription_end_date
+    ? new Date(tenant.subscription_expires_at || tenant.subscription_end_date)
+    : null
+
+  const days = expiry ? Math.ceil((expiry.getTime() - Date.now()) / 86400000) : null
+  const status =
+    days !== null && days < 0
+      ? 'Expired'
+      : days !== null && days <= 7
+      ? 'Expiring soon'
+      : tenant.subscription_status || tenant.status
+
+  const amount = chosen ? (cycle === 'monthly' ? chosen.price_monthly : chosen.price_yearly) : 0
+
+  const submit = async () => {
+    if (!chosen || !utr.trim()) return setNotice('Enter UTR / transaction reference.')
+    const id = await currentRestaurantTenant()
+    const { error } = await db.from('subscription_payment_requests').insert({
+      tenant_id: id,
+      plan_id: chosen.id,
+      amount,
+      billing_cycle: cycle,
+      utr_reference: utr.trim(),
+    })
+
+    if (error) setNotice(error.message)
+    else {
+      setChosen(null)
+      setUtr('')
+      setNotice('Payment submitted for admin verification.')
+      void load()
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-semibold">Subscription & billing</h2>
+        <p className="text-muted-foreground">Manage your plan and submit renewal payments.</p>
+      </div>
+
+      {notice && <p className="rounded-xl bg-primary/10 p-3 text-primary">{notice}</p>}
+
+      <section className="rounded-2xl border bg-card p-6">
+        <div className="flex flex-wrap justify-between gap-4">
+          <div>
+            <p className="text-sm text-muted-foreground">Current plan</p>
+            <h3 className="mt-1 text-2xl font-bold">{tenant.saas_plans?.name || 'Trial'}</h3>
+            <p className="mt-3">
+              <span
+                className={`rounded-full px-2.5 py-1 text-sm font-medium ${
+                  status === 'Expired'
+                    ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                    : status === 'Expiring soon'
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                }`}
+              >
+                {status}
+              </span>
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">Exact expiry</p>
+            <b>{expiry ? expiry.toLocaleString('en-IN') : 'Not set'}</b>
+            <p className="mt-1 text-sm">
+              {days === null ? 'Contact RVC support' : days < 0 ? 'Renew to restore access' : `${days} days remaining`}
+            </p>
+          </div>
+        </div>
+        {days !== null && (
+          <div className="mt-5 h-2 overflow-hidden rounded bg-muted">
+            <i
+              className={`block h-full ${days < 0 ? 'bg-red-500' : days <= 7 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+              style={{ width: `${Math.max(0, Math.min(100, (days / 30) * 100))}%` }}
+            />
+          </div>
+        )}
+      </section>
+
+      <h3 className="text-xl font-semibold">Available plans</h3>
+      <div className="grid gap-4 md:grid-cols-3">
+        {plans.map((plan) => {
+          const current = plan.id === tenant.plan_id
+          return (
+            <article
+              key={plan.id}
+              className={`rounded-2xl border bg-card p-5 ${plan.is_popular ? 'border-primary' : ''}`}
+            >
+              <div className="flex justify-between">
+                <b>{plan.name}</b>
+                {plan.is_popular && (
+                  <span className="text-primary">
+                    <Sparkles className="inline size-4" />
+                    Popular
+                  </span>
+                )}
+              </div>
+              <p className="mt-3 text-2xl font-bold">
+                {money(plan.price_monthly)}
+                <small className="text-sm font-normal">/month</small>
+              </p>
+              <p className="text-sm text-muted-foreground">{money(plan.price_yearly)}/year</p>
+              <ul className="mt-4 space-y-2 text-sm">
+                {(plan.features || []).map((feature) => (
+                  <li key={feature}>
+                    <CheckCircle2 className="mr-1 inline size-4 text-emerald-600" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => {
+                  setChosen(plan)
+                  setCycle('monthly')
+                }}
+                className="mt-5 w-full rounded-xl bg-primary py-2.5 text-primary-foreground"
+              >
+                {current ? 'Renew plan' : `Upgrade to ${plan.name}`}
+              </button>
+            </article>
+          )
+        })}
+      </div>
+
+      <section className="overflow-x-auto rounded-2xl border bg-card">
+        <div className="border-b p-4">
+          <h3 className="font-semibold">Billing history</h3>
+        </div>
+        <table className="w-full min-w-[650px] text-sm">
+          <thead className="bg-muted/50 text-left text-xs">
+            <tr>
+              <th className="p-4">Plan</th>
+              <th>UTR reference</th>
+              <th>Payment date</th>
+              <th>Amount</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {requests.map((r) => (
+              <tr key={r.id} className="border-t">
+                <td className="p-4">{r.saas_plans?.name || 'Plan'}</td>
+                <td>{r.utr_reference}</td>
+                <td>{new Date(r.created_at).toLocaleString('en-IN')}</td>
+                <td>{money(r.amount)}</td>
+                <td
+                  className={
+                    r.status === 'paid'
+                      ? 'text-emerald-600 font-semibold'
+                      : r.status === 'rejected'
+                      ? 'text-red-600 font-semibold'
+                      : 'text-amber-600 font-semibold'
+                  }
+                >
+                  {r.status === 'paid' ? (
+                    'Paid'
+                  ) : r.status === 'rejected' ? (
+                    <div>
+                      <span className="inline-flex items-center gap-1">
+                        <AlertCircle className="size-3.5 inline text-red-600" />
+                        Rejected
+                      </span>
+                      {r.rejection_note && (
+                        <small className="block font-normal text-xs text-red-500/90 mt-0.5">
+                          Reason: {r.rejection_note}
+                        </small>
+                      )}
+                    </div>
+                  ) : (
+                    'Pending verification'
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!requests.length && <p className="p-8 text-center text-muted-foreground">No renewal requests yet.</p>}
+      </section>
+
+      {chosen && (
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/50 p-4">
+          <section className="w-full max-w-md rounded-2xl bg-card p-6">
+            <button onClick={() => setChosen(null)} className="float-right">
+              <X />
+            </button>
+            <h3 className="text-xl font-bold">{chosen.name} renewal</h3>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setCycle('monthly')}
+                className={`rounded-lg p-2 ${
+                  cycle === 'monthly' ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                }`}
+              >
+                Monthly {money(chosen.price_monthly)}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCycle('yearly')}
+                className={`rounded-lg p-2 ${
+                  cycle === 'yearly' ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                }`}
+              >
+                Yearly {money(chosen.price_yearly)}
+              </button>
+            </div>
+            <p className="mt-2 text-center text-sm">
+              Selected: <b>{cycle === 'monthly' ? 'Monthly · 30 days' : 'Yearly · 365 days'}</b> · <b>{money(amount)}</b>
+            </p>
+            <div className="mt-4 rounded-xl bg-muted p-4 text-center">
+              {payment?.rvc_upi_qr_url ? (
+                <img
+                  src={payment.rvc_upi_qr_url}
+                  alt="RVC UPI QR"
+                  className="mx-auto size-40 object-contain"
+                />
+              ) : (
+                <QrCode className="mx-auto size-24 text-muted-foreground" />
+              )}
+              <p className="mt-2">
+                <b>UPI:</b> {payment?.rvc_upi_id || 'UPI details are being configured.'}
+              </p>
+            </div>
+            <input
+              value={utr}
+              onChange={(e) => setUtr(e.target.value)}
+              placeholder="UTR / transaction reference number"
+              className="mt-4 w-full rounded-xl border p-3"
+            />
+            <button
+              onClick={() => void submit()}
+              className="mt-3 w-full rounded-xl bg-primary py-3 text-primary-foreground"
+            >
+              <ShieldCheck className="mr-1 inline size-4" />
+              Submit for admin approval
+            </button>
+          </section>
+        </div>
+      )}
+    </div>
+  )
+}

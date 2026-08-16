@@ -301,7 +301,7 @@ export default function RegisterPage() {
                 <p className="text-slate-600 dark:text-slate-300 mb-8">Select the perfect plan for your business</p>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                  {(plans.length ? plans : PLANS.map((plan,index) => ({ ...plan, id: plan.id, price_monthly: Number(plan.price.replace(/[^0-9]/g,'')), features: plan.features, is_popular: !!plan.popular }))).map((plan) => (
+                  {(plans.length ? plans : PLANS.map((plan) => ({ ...plan, id: plan.id, price_monthly: Number(plan.price.replace(/[^0-9]/g,'')), features: plan.features, is_popular: !!plan.popular }))).map((plan) => (
                     <motion.button
                       key={plan.id}
                       type="button"

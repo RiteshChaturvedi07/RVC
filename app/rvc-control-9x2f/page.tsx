@@ -19,7 +19,7 @@ export default function AdminLoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
-  const [mfaFactorId, setMfaFactorId] = useState('')
+  const [mfaFactorId] = useState('')
 
   const validateCredentials = (): boolean => {
     const newErrors: Record<string, string> = {}

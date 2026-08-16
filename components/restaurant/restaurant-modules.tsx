@@ -4,14 +4,506 @@ import { Download, Plus, Save } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { currentRestaurantTenant } from '@/lib/restaurant'
 import { RestaurantSimpleWorkspace } from './restaurant-workspaces'
-const s=()=>createClient();const money=(x:number)=>`₹${Number(x).toLocaleString('en-IN')}`;const uploadId=()=>globalThis.crypto?.randomUUID?.()??`${Date.now()}-${Math.random().toString(36).slice(2,12)}`
-function useRestaurant<T>(query:(tenant:string)=>Promise<T>){const[data,setData]=useState<T|null>(null),[tenant,setTenant]=useState(''),[error,setError]=useState('');const reload=async()=>{try{const t=tenant||await currentRestaurantTenant();setTenant(t);setData(await query(t))}catch(e){setError(e instanceof Error?e.message:'Unable to load')}};useEffect(()=>{reload()},[]);return{data,tenant,error,reload}}
-export function RestaurantCustomers(){const state=useRestaurant(async t=>{const{data,error}=await s().from('restaurant_orders').select('customer_name,customer_phone,total,created_at').eq('tenant_id',t).not('customer_phone','is',null);if(error)throw error;const map=new Map<string,{name:string;phone:string;orders:number;spent:number;last:string}>();(data??[]).forEach((o:any)=>{const a=map.get(o.customer_phone)||{name:o.customer_name||'Guest',phone:o.customer_phone,orders:0,spent:0,last:o.created_at};a.orders++;a.spent+=Number(o.total);if(o.created_at>a.last)a.last=o.created_at;map.set(o.customer_phone,a)});return[...map.values()]});if(!state.data)return <RestaurantSimpleWorkspace title="Customers" description={state.error||'Loading real guest order history…'}/>;return <RestaurantSimpleWorkspace title="Customers" description="Guest records are built automatically from QR orders."><div className="space-y-2">{state.data.map(c=><div key={c.phone} className="flex justify-between rounded-xl border border-border bg-card p-4"><div><b>{c.name}</b><p className="text-sm text-muted-foreground">{c.phone} · Last order {new Date(c.last).toLocaleDateString('en-IN')}</p></div><div className="text-right"><b>{money(c.spent)}</b><p className="text-sm text-muted-foreground">{c.orders} orders</p></div></div>)}{!state.data.length&&<p className="text-muted-foreground">Customers appear after guests provide a phone number while ordering.</p>}</div></RestaurantSimpleWorkspace>}
-export function RestaurantFinance(){const state=useRestaurant(async t=>{const{data,error}=await s().from('restaurant_orders').select('total,payment_status,payment_method,created_at').eq('tenant_id',t);if(error)throw error;return data??[]});if(!state.data)return <RestaurantSimpleWorkspace title="Finance" description={state.error||'Loading live payment records…'}/>;const records=state.data as any[],paid=records.filter(o=>o.payment_status==='paid'),cash=paid.filter(o=>o.payment_method==='cash').reduce((x,o)=>x+Number(o.total),0),online=paid.filter(o=>o.payment_method==='online').reduce((x,o)=>x+Number(o.total),0);const exportCsv=()=>{const csv='payment_status,payment_method,total,created_at\n'+records.map(o=>`${o.payment_status},${o.payment_method??''},${o.total},${o.created_at}`).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='restaurant-payments.csv';a.click()};return <RestaurantSimpleWorkspace title="Finance" description="Actual settled and outstanding orders."><div className="grid gap-4 md:grid-cols-3"><Box label="Cash collected" value={money(cash)}/><Box label="Online collected" value={money(online)}/><Box label="Unpaid orders" value={String(records.length-paid.length)}/></div><button onClick={exportCsv} className="mt-5 rounded-xl border border-border px-4 py-2 text-sm"><Download className="mr-1 inline size-4"/>Export CSV</button></RestaurantSimpleWorkspace>}
-export function RestaurantAnalytics(){const state=useRestaurant(async t=>{const{data,error}=await s().from('restaurant_orders').select('total,status').eq('tenant_id',t);if(error)throw error;return data??[]});if(!state.data)return <RestaurantSimpleWorkspace title="Analytics" description={state.error||'Loading live analytics…'}/>;const completed=(state.data as any[]).filter(o=>o.status!=='cancelled'),total=completed.reduce((n,o)=>n+Number(o.total),0);return <RestaurantSimpleWorkspace title="Analytics" description="Live performance calculated from your orders."><div className="grid gap-4 sm:grid-cols-3"><Box label="Orders" value={String(completed.length)}/><Box label="Revenue" value={money(total)}/><Box label="Average order" value={money(completed.length?total/completed.length:0)}/></div></RestaurantSimpleWorkspace>}
-export function RestaurantMarketing(){const state=useRestaurant(async t=>{const{data,error}=await s().from('restaurant_promotions').select('*').eq('tenant_id',t).order('created_at',{ascending:false});if(error)throw error;return data??[]});const[name,setName]=useState(''),[discount,setDiscount]=useState('');const add=async()=>{if(!name)return;const{error}=await s().from('restaurant_promotions').insert({tenant_id:state.tenant,name,discount_percent:Number(discount||0)});if(error)alert(error.message);else{setName('');setDiscount('');state.reload()}};if(!state.data)return <RestaurantSimpleWorkspace title="Marketing" description={state.error||'Loading promotions…'}/>;return <RestaurantSimpleWorkspace title="Marketing" description="Create promotions for your own operational campaigns."><div className="flex gap-2"><input value={name} onChange={e=>setName(e.target.value)} placeholder="Offer name" className="flex-1 rounded-xl border border-border p-2"/><input value={discount} onChange={e=>setDiscount(e.target.value)} placeholder="Discount %" type="number" className="w-28 rounded-xl border border-border p-2"/><button onClick={add} className="rounded-xl bg-primary px-3 text-primary-foreground"><Plus/></button></div>{(state.data as any[]).map(p=><div key={p.id} className="mt-3 flex justify-between rounded-xl border border-border p-4"><b>{p.name}</b><span>{p.discount_percent}% · {p.active?'Active':'Disabled'}</span></div>)}</RestaurantSimpleWorkspace>}
-export function RestaurantStaff(){const state=useRestaurant(async t=>{const{data,error}=await s().from('profiles').select('id,full_name,phone,role').eq('tenant_id',t);if(error)throw error;return data??[]});const[email,setEmail]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);const add=async()=>{if(!email.trim())return setNotice('Enter the staff member’s RVC login email.');setBusy(true);const{error}=await s().rpc('restaurant_add_staff',{p_email:email.trim()});setBusy(false);if(error)setNotice(error.message);else{setEmail('');setNotice('Staff member added.');state.reload()}};const remove=async(id:string)=>{if(!confirm('Remove this staff member’s restaurant access?'))return;setBusy(true);const{error}=await s().rpc('restaurant_remove_staff',{p_profile_id:id});setBusy(false);if(error)setNotice(error.message);else{setNotice('Staff member removed.');state.reload()}};if(!state.data)return <RestaurantSimpleWorkspace title="Staff" description={state.error||'Loading staff…'}/>;return <RestaurantSimpleWorkspace title="Staff" description="Add people who have already registered an RVC account, then remove access whenever needed."><div className="mb-5 flex gap-2"><input value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="staff@example.com" className="flex-1 rounded-xl border border-border p-2"/><button disabled={busy} onClick={add} className="rounded-xl bg-primary px-4 text-sm text-primary-foreground disabled:opacity-50">Add staff</button></div>{notice&&<p className="mb-3 rounded-xl bg-primary/10 p-3 text-sm text-primary">{notice}</p>}<div className="space-y-2">{(state.data as any[]).map(p=><div key={p.id} className="flex items-center justify-between rounded-xl border border-border p-4"><span><b>{p.full_name||'Unnamed staff'}</b><small className="ml-2 text-muted-foreground">{p.phone||'—'}</small></span>{p.role==='staff'?<button disabled={busy} onClick={()=>remove(p.id)} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600">Remove</button>:<span className="capitalize text-sm">{p.role.replace('_',' ')}</span>}</div>)}</div></RestaurantSimpleWorkspace>}
-export function RestaurantSupport(){const state=useRestaurant(async t=>{const{data,error}=await s().from('support_tickets').select('*').eq('tenant_id',t).order('created_at',{ascending:false});if(error)throw error;return data??[]});const[subject,setSubject]=useState('');const send=async()=>{if(!subject)return;const user=(await s().auth.getUser()).data.user;const{error}=await s().from('support_tickets').insert({tenant_id:state.tenant,subject,created_by:user?.id});if(error)alert(error.message);else{setSubject('');state.reload()}};if(!state.data)return <RestaurantSimpleWorkspace title="Support" description={state.error||'Loading support…'}/>;return <RestaurantSimpleWorkspace title="Support" description="Send a real ticket directly to RVC Control."><div className="flex gap-2"><input value={subject} onChange={e=>setSubject(e.target.value)} placeholder="How can we help?" className="flex-1 rounded-xl border border-border p-2"/><button onClick={send} className="rounded-xl bg-primary px-4 text-primary-foreground">Send</button></div>{(state.data as any[]).map(x=><div key={x.id} className="mt-3 rounded-xl border border-border p-4"><b>{x.subject}</b><span className="float-right capitalize text-primary">{x.status}</span></div>)}</RestaurantSimpleWorkspace>}
-export function RestaurantSettings(){const state=useRestaurant(async t=>{const{data,error}=await s().from('restaurant_settings').select('*').eq('tenant_id',t).single();if(error)throw error;return data as any});const[form,setForm]=useState<any>(null),[notice,setNotice]=useState(''),[saving,setSaving]=useState(false),[upiQr,setUpiQr]=useState<File|null>(null);const fileRef=useRef<HTMLInputElement>(null);useEffect(()=>{if(state.data)setForm(state.data)},[state.data]);const save=async()=>{if(!state.tenant||!form)return setNotice('Restaurant profile is still loading.');setSaving(true);setNotice('');let qrUrl=form.merchant_upi_qr_url||null;if(upiQr){if(upiQr.size>5*1024*1024){setSaving(false);return setNotice('UPI QR image must be under 5 MB.')}const path=`${state.tenant}/merchant-upi-${uploadId()}.${upiQr.name.split('.').pop()||'png'}`;const{error:uploadError}=await s().storage.from('menu-images').upload(path,upiQr,{contentType:upiQr.type});if(uploadError){setSaving(false);return setNotice(`UPI QR upload failed: ${uploadError.message}`)}qrUrl=s().storage.from('menu-images').getPublicUrl(path).data.publicUrl}const{error}=await s().from('restaurant_settings').update({display_name:form.display_name,address:form.address,phone:form.phone,ordering_enabled:form.ordering_enabled,order_notifications:form.order_notifications,merchant_upi_id:form.merchant_upi_id?.trim()||null,merchant_upi_qr_url:qrUrl,updated_at:new Date().toISOString()}).eq('tenant_id',state.tenant);setSaving(false);if(error)setNotice(`Save failed: ${error.message}`);else{setUpiQr(null);if(fileRef.current)fileRef.current.value='';setNotice('Settings saved successfully.');state.reload()}};const service=async(open:boolean)=>{setSaving(true);const result=open?await s().rpc('restaurant_open_service',{p_closes_at:null}):await s().rpc('restaurant_close_service');setSaving(false);if(result.error)setNotice(result.error.message);else{setNotice(open?'Service opened: QR orders are live.':'Service closed: QR orders are paused.');state.reload()}};if(!form)return <RestaurantSimpleWorkspace title="Settings" description={state.error||'Loading restaurant settings…'}/>;return <RestaurantSimpleWorkspace title="Settings" description="Your saved settings control your public QR ordering and payment experience."><div className="max-w-xl space-y-4">{notice&&<p className="rounded-xl bg-primary/10 p-3 text-sm text-primary">{notice}</p>}<div className="flex items-center justify-between rounded-xl bg-secondary/60 p-4"><div><b>QR ordering service</b><small className="block text-muted-foreground">{form.ordering_enabled?'Currently accepting guest orders.':'Currently paused.'}</small></div><button disabled={saving} onClick={()=>service(!form.ordering_enabled)} className={`rounded-lg px-3 py-2 text-sm font-semibold ${form.ordering_enabled?'bg-red-500 text-white':'bg-emerald-600 text-white'}`}>{form.ordering_enabled?'Close service':'Open service'}</button></div>{[['display_name','Restaurant name'],['address','Address'],['phone','Phone']].map(([k,l])=><label key={k} className="block text-sm">{l}<input value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})} className="mt-1 w-full rounded-xl border border-border p-2"/></label>)}<section className="rounded-2xl border border-border bg-card p-4"><h3 className="font-semibold">Payment & UPI setup</h3><p className="mt-1 text-sm text-muted-foreground">Guests see this payment QR and UPI ID after placing an order.</p><label className="mt-4 block text-sm">Merchant UPI ID<input value={form.merchant_upi_id||''} onChange={e=>setForm({...form,merchant_upi_id:e.target.value})} placeholder="restaurant@upi" className="mt-1 w-full rounded-xl border border-border p-2"/></label><label className="mt-3 block text-sm">UPI QR image<input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>setUpiQr(e.target.files?.[0]||null)} className="mt-1 block w-full rounded-xl border border-border p-2 text-sm"/></label>{(upiQr||form.merchant_upi_qr_url)&&<div className="mt-3 flex items-center gap-3">{form.merchant_upi_qr_url&&<img src={form.merchant_upi_qr_url} alt="Current merchant UPI QR" className="size-20 rounded-lg border object-contain"/>}<span className="text-xs text-muted-foreground">{upiQr?'New QR image will upload when you save.':'Current payment QR is live.'}</span></div>}</section><label className="flex gap-2"><input type="checkbox" checked={form.ordering_enabled} onChange={e=>setForm({...form,ordering_enabled:e.target.checked})}/>Accept QR orders</label><button disabled={saving} onClick={save} className="rounded-xl bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"><Save className="mr-1 inline size-4"/>{saving?'Saving…':'Save settings'}</button></div></RestaurantSimpleWorkspace>}
-export function RestaurantBilling(){return <RestaurantSimpleWorkspace title="RVC billing" description="Subscription changes are managed by RVC Control. Your current plan and invoices appear here once issued."/>}
-function Box({label,value}:{label:string;value:string}){return <div className="rounded-xl border border-border bg-card p-4"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold">{value}</p></div>}
+
+const s = () => createClient()
+const money = (x: number) => `₹${Number(x).toLocaleString('en-IN')}`
+const uploadId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+
+interface CustomerOrderRow {
+  customer_name: string | null
+  customer_phone: string | null
+  total: number
+  created_at: string
+}
+
+interface PaymentRecordRow {
+  total: number
+  payment_status: string
+  payment_method: string | null
+  created_at: string
+}
+
+interface AnalyticsOrderRow {
+  total: number
+  status: string
+}
+
+interface PromotionRow {
+  id: string
+  name: string
+  discount_percent: number
+  active?: boolean
+  created_at?: string
+}
+
+interface StaffProfileRow {
+  id: string
+  full_name: string | null
+  phone: string | null
+  role: string
+}
+
+interface SupportTicketRow {
+  id: string
+  subject: string
+  status: string
+  created_at?: string
+}
+
+interface RestaurantSettingsData {
+  display_name: string
+  address: string | null
+  phone: string | null
+  ordering_enabled: boolean
+  order_notifications: boolean
+  merchant_upi_id: string | null
+  merchant_upi_qr_url: string | null
+  [key: string]: string | boolean | null | undefined
+}
+
+function useRestaurant<T>(query: (tenant: string) => Promise<T>) {
+  const [data, setData] = useState<T | null>(null),
+    [tenant, setTenant] = useState(''),
+    [error, setError] = useState('')
+  const reload = async () => {
+    try {
+      const t = tenant || (await currentRestaurantTenant())
+      setTenant(t)
+      setData(await query(t))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to load')
+    }
+  }
+  useEffect(() => {
+    reload()
+  }, [])
+  return { data, tenant, error, reload }
+}
+
+export function RestaurantCustomers() {
+  const state = useRestaurant(async t => {
+    const { data, error } = await s()
+      .from('restaurant_orders')
+      .select('customer_name,customer_phone,total,created_at')
+      .eq('tenant_id', t)
+      .not('customer_phone', 'is', null)
+    if (error) throw error
+    const map = new Map<string, { name: string; phone: string; orders: number; spent: number; last: string }>()
+    const rows = (data ?? []) as unknown as CustomerOrderRow[]
+    rows.forEach(o => {
+      if (!o.customer_phone) return
+      const a = map.get(o.customer_phone) || {
+        name: o.customer_name || 'Guest',
+        phone: o.customer_phone,
+        orders: 0,
+        spent: 0,
+        last: o.created_at,
+      }
+      a.orders++
+      a.spent += Number(o.total)
+      if (o.created_at > a.last) a.last = o.created_at
+      map.set(o.customer_phone, a)
+    })
+    return [...map.values()]
+  })
+  if (!state.data) return <RestaurantSimpleWorkspace title="Customers" description={state.error || 'Loading real guest order history…'} />
+  return (
+    <RestaurantSimpleWorkspace title="Customers" description="Guest records are built automatically from QR orders.">
+      <div className="space-y-2">
+        {state.data.map(c => (
+          <div key={c.phone} className="flex justify-between rounded-xl border border-border bg-card p-4">
+            <div>
+              <b>{c.name}</b>
+              <p className="text-sm text-muted-foreground">
+                {c.phone} · Last order {new Date(c.last).toLocaleDateString('en-IN')}
+              </p>
+            </div>
+            <div className="text-right">
+              <b>{money(c.spent)}</b>
+              <p className="text-sm text-muted-foreground">{c.orders} orders</p>
+            </div>
+          </div>
+        ))}
+        {!state.data.length && <p className="text-muted-foreground">Customers appear after guests provide a phone number while ordering.</p>}
+      </div>
+    </RestaurantSimpleWorkspace>
+  )
+}
+
+export function RestaurantFinance() {
+  const state = useRestaurant(async t => {
+    const { data, error } = await s().from('restaurant_orders').select('total,payment_status,payment_method,created_at').eq('tenant_id', t)
+    if (error) throw error
+    return (data ?? []) as unknown as PaymentRecordRow[]
+  })
+  if (!state.data) return <RestaurantSimpleWorkspace title="Finance" description={state.error || 'Loading live payment records…'} />
+  const records = state.data
+  const paid = records.filter(o => o.payment_status === 'paid')
+  const cash = paid.filter(o => o.payment_method === 'cash').reduce((x, o) => x + Number(o.total), 0)
+  const online = paid.filter(o => o.payment_method === 'online').reduce((x, o) => x + Number(o.total), 0)
+  const exportCsv = () => {
+    const csv =
+      'payment_status,payment_method,total,created_at\n' +
+      records.map(o => `${o.payment_status},${o.payment_method ?? ''},${o.total},${o.created_at}`).join('\n')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    a.download = 'restaurant-payments.csv'
+    a.click()
+  }
+  return (
+    <RestaurantSimpleWorkspace title="Finance" description="Actual settled and outstanding orders.">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Box label="Cash collected" value={money(cash)} />
+        <Box label="Online collected" value={money(online)} />
+        <Box label="Unpaid orders" value={String(records.length - paid.length)} />
+      </div>
+      <button onClick={exportCsv} className="mt-5 rounded-xl border border-border px-4 py-2 text-sm">
+        <Download className="mr-1 inline size-4" />
+        Export CSV
+      </button>
+    </RestaurantSimpleWorkspace>
+  )
+}
+
+export function RestaurantAnalytics() {
+  const state = useRestaurant(async t => {
+    const { data, error } = await s().from('restaurant_orders').select('total,status').eq('tenant_id', t)
+    if (error) throw error
+    return (data ?? []) as unknown as AnalyticsOrderRow[]
+  })
+  if (!state.data) return <RestaurantSimpleWorkspace title="Analytics" description={state.error || 'Loading live analytics…'} />
+  const completed = state.data.filter(o => o.status !== 'cancelled')
+  const total = completed.reduce((n, o) => n + Number(o.total), 0)
+  return (
+    <RestaurantSimpleWorkspace title="Analytics" description="Live performance calculated from your orders.">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Box label="Orders" value={String(completed.length)} />
+        <Box label="Revenue" value={money(total)} />
+        <Box label="Average order" value={money(completed.length ? total / completed.length : 0)} />
+      </div>
+    </RestaurantSimpleWorkspace>
+  )
+}
+
+export function RestaurantMarketing() {
+  const state = useRestaurant(async t => {
+    const { data, error } = await s().from('restaurant_promotions').select('*').eq('tenant_id', t).order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []) as unknown as PromotionRow[]
+  })
+  const [name, setName] = useState(''),
+    [discount, setDiscount] = useState('')
+  const add = async () => {
+    if (!name) return
+    const { error } = await s()
+      .from('restaurant_promotions')
+      .insert({ tenant_id: state.tenant, name, discount_percent: Number(discount || 0) })
+    if (error) alert(error.message)
+    else {
+      setName('')
+      setDiscount('')
+      state.reload()
+    }
+  }
+  if (!state.data) return <RestaurantSimpleWorkspace title="Marketing" description={state.error || 'Loading promotions…'} />
+  return (
+    <RestaurantSimpleWorkspace title="Marketing" description="Create promotions for your own operational campaigns.">
+      <div className="flex gap-2">
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="Offer name" className="flex-1 rounded-xl border border-border p-2" />
+        <input
+          value={discount}
+          onChange={e => setDiscount(e.target.value)}
+          placeholder="Discount %"
+          type="number"
+          className="w-28 rounded-xl border border-border p-2"
+        />
+        <button onClick={add} className="rounded-xl bg-primary px-3 text-primary-foreground">
+          <Plus />
+        </button>
+      </div>
+      {state.data.map(p => (
+        <div key={p.id} className="mt-3 flex justify-between rounded-xl border border-border p-4">
+          <b>{p.name}</b>
+          <span>
+            {p.discount_percent}% · {p.active ? 'Active' : 'Disabled'}
+          </span>
+        </div>
+      ))}
+    </RestaurantSimpleWorkspace>
+  )
+}
+
+export function RestaurantStaff() {
+  const state = useRestaurant(async t => {
+    const { data, error } = await s().from('profiles').select('id,full_name,phone,role').eq('tenant_id', t)
+    if (error) throw error
+    return (data ?? []) as unknown as StaffProfileRow[]
+  })
+  const [email, setEmail] = useState(''),
+    [notice, setNotice] = useState(''),
+    [busy, setBusy] = useState(false)
+  const add = async () => {
+    if (!email.trim()) return setNotice('Enter the staff member’s RVC login email.')
+    setBusy(true)
+    const { error } = await s().rpc('restaurant_add_staff', { p_email: email.trim() })
+    setBusy(false)
+    if (error) setNotice(error.message)
+    else {
+      setEmail('')
+      setNotice('Staff member added.')
+      state.reload()
+    }
+  }
+  const remove = async (id: string) => {
+    if (!confirm('Remove this staff member’s restaurant access?')) return
+    setBusy(true)
+    const { error } = await s().rpc('restaurant_remove_staff', { p_profile_id: id })
+    setBusy(false)
+    if (error) setNotice(error.message)
+    else {
+      setNotice('Staff member removed.')
+      state.reload()
+    }
+  }
+  if (!state.data) return <RestaurantSimpleWorkspace title="Staff" description={state.error || 'Loading staff…'} />
+  return (
+    <RestaurantSimpleWorkspace title="Staff" description="Add people who have already registered an RVC account, then remove access whenever needed.">
+      <div className="mb-5 flex gap-2">
+        <input
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          type="email"
+          placeholder="staff@example.com"
+          className="flex-1 rounded-xl border border-border p-2"
+        />
+        <button disabled={busy} onClick={add} className="rounded-xl bg-primary px-4 text-sm text-primary-foreground disabled:opacity-50">
+          Add staff
+        </button>
+      </div>
+      {notice && <p className="mb-3 rounded-xl bg-primary/10 p-3 text-sm text-primary">{notice}</p>}
+      <div className="space-y-2">
+        {state.data.map(p => (
+          <div key={p.id} className="flex items-center justify-between rounded-xl border border-border p-4">
+            <span>
+              <b>{p.full_name || 'Unnamed staff'}</b>
+              <small className="ml-2 text-muted-foreground">{p.phone || '—'}</small>
+            </span>
+            {p.role === 'staff' ? (
+              <button disabled={busy} onClick={() => remove(p.id)} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600">
+                Remove
+              </button>
+            ) : (
+              <span className="capitalize text-sm">{p.role.replace('_', ' ')}</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </RestaurantSimpleWorkspace>
+  )
+}
+
+export function RestaurantSupport() {
+  const state = useRestaurant(async t => {
+    const { data, error } = await s()
+      .from('support_tickets')
+      .select('*')
+      .eq('tenant_id', t)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []) as unknown as SupportTicketRow[]
+  })
+  const [subject, setSubject] = useState('')
+  const send = async () => {
+    if (!subject) return
+    const user = (await s().auth.getUser()).data.user
+    const { error } = await s().from('support_tickets').insert({ tenant_id: state.tenant, subject, created_by: user?.id })
+    if (error) alert(error.message)
+    else {
+      setSubject('')
+      state.reload()
+    }
+  }
+  if (!state.data) return <RestaurantSimpleWorkspace title="Support" description={state.error || 'Loading support…'} />
+  return (
+    <RestaurantSimpleWorkspace title="Support" description="Send a real ticket directly to RVC Control.">
+      <div className="flex gap-2">
+        <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="How can we help?" className="flex-1 rounded-xl border border-border p-2" />
+        <button onClick={send} className="rounded-xl bg-primary px-4 text-primary-foreground">
+          Send
+        </button>
+      </div>
+      {state.data.map(x => (
+        <div key={x.id} className="mt-3 rounded-xl border border-border p-4">
+          <b>{x.subject}</b>
+          <span className="float-right capitalize text-primary">{x.status}</span>
+        </div>
+      ))}
+    </RestaurantSimpleWorkspace>
+  )
+}
+
+export function RestaurantSettings() {
+  const state = useRestaurant(async t => {
+    const { data, error } = await s().from('restaurant_settings').select('*').eq('tenant_id', t).single()
+    if (error) throw error
+    return data as unknown as RestaurantSettingsData
+  })
+  const [form, setForm] = useState<RestaurantSettingsData | null>(null),
+    [notice, setNotice] = useState(''),
+    [saving, setSaving] = useState(false),
+    [upiQr, setUpiQr] = useState<File | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (state.data) setForm(state.data)
+  }, [state.data])
+  const save = async () => {
+    if (!state.tenant || !form) return setNotice('Restaurant profile is still loading.')
+    setSaving(true)
+    setNotice('')
+    let qrUrl = form.merchant_upi_qr_url || null
+    if (upiQr) {
+      if (upiQr.size > 5 * 1024 * 1024) {
+        setSaving(false)
+        return setNotice('UPI QR image must be under 5 MB.')
+      }
+      const path = `${state.tenant}/merchant-upi-${uploadId()}.${upiQr.name.split('.').pop() || 'png'}`
+      const { error: uploadError } = await s().storage.from('menu-images').upload(path, upiQr, { contentType: upiQr.type })
+      if (uploadError) {
+        setSaving(false)
+        return setNotice(`UPI QR upload failed: ${uploadError.message}`)
+      }
+      qrUrl = s().storage.from('menu-images').getPublicUrl(path).data.publicUrl
+    }
+    const { error } = await s()
+      .from('restaurant_settings')
+      .update({
+        display_name: form.display_name,
+        address: form.address,
+        phone: form.phone,
+        ordering_enabled: form.ordering_enabled,
+        order_notifications: form.order_notifications,
+        merchant_upi_id: form.merchant_upi_id?.trim() || null,
+        merchant_upi_qr_url: qrUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('tenant_id', state.tenant)
+    setSaving(false)
+    if (error) setNotice(`Save failed: ${error.message}`)
+    else {
+      setUpiQr(null)
+      if (fileRef.current) fileRef.current.value = ''
+      setNotice('Settings saved successfully.')
+      state.reload()
+    }
+  }
+  const service = async (open: boolean) => {
+    setSaving(true)
+    const result = open ? await s().rpc('restaurant_open_service', { p_closes_at: null }) : await s().rpc('restaurant_close_service')
+    setSaving(false)
+    if (result.error) setNotice(result.error.message)
+    else {
+      setNotice(open ? 'Service opened: QR orders are live.' : 'Service closed: QR orders are paused.')
+      state.reload()
+    }
+  }
+  if (!form) return <RestaurantSimpleWorkspace title="Settings" description={state.error || 'Loading restaurant settings…'} />
+  return (
+    <RestaurantSimpleWorkspace title="Settings" description="Your saved settings control your public QR ordering and payment experience.">
+      <div className="max-w-xl space-y-4">
+        {notice && <p className="rounded-xl bg-primary/10 p-3 text-sm text-primary">{notice}</p>}
+        <div className="flex items-center justify-between rounded-xl bg-secondary/60 p-4">
+          <div>
+            <b>QR ordering service</b>
+            <small className="block text-muted-foreground">
+              {form.ordering_enabled ? 'Currently accepting guest orders.' : 'Currently paused.'}
+            </small>
+          </div>
+          <button
+            disabled={saving}
+            onClick={() => service(!form.ordering_enabled)}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+              form.ordering_enabled ? 'bg-red-500 text-white' : 'bg-emerald-600 text-white'
+            }`}
+          >
+            {form.ordering_enabled ? 'Close service' : 'Open service'}
+          </button>
+        </div>
+        {(
+          [
+            ['display_name', 'Restaurant name'],
+            ['address', 'Address'],
+            ['phone', 'Phone'],
+          ] as const
+        ).map(([k, l]) => (
+          <label key={k} className="block text-sm">
+            {l}
+            <input
+              value={(form[k] as string) || ''}
+              onChange={e => setForm({ ...form, [k]: e.target.value })}
+              className="mt-1 w-full rounded-xl border border-border p-2"
+            />
+          </label>
+        ))}
+        <section className="rounded-2xl border border-border bg-card p-4">
+          <h3 className="font-semibold">Payment & UPI setup</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Guests see this payment QR and UPI ID after placing an order.</p>
+          <label className="mt-4 block text-sm">
+            Merchant UPI ID
+            <input
+              value={form.merchant_upi_id || ''}
+              onChange={e => setForm({ ...form, merchant_upi_id: e.target.value })}
+              placeholder="restaurant@upi"
+              className="mt-1 w-full rounded-xl border border-border p-2"
+            />
+          </label>
+          <label className="mt-3 block text-sm">
+            UPI QR image
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={e => setUpiQr(e.target.files?.[0] || null)}
+              className="mt-1 block w-full rounded-xl border border-border p-2 text-sm"
+            />
+          </label>
+          {(upiQr || form.merchant_upi_qr_url) && (
+            <div className="mt-3 flex items-center gap-3">
+              {form.merchant_upi_qr_url && (
+                <img src={form.merchant_upi_qr_url} alt="Current merchant UPI QR" className="size-20 rounded-lg border object-contain" />
+              )}
+              <span className="text-xs text-muted-foreground">
+                {upiQr ? 'New QR image will upload when you save.' : 'Current payment QR is live.'}
+              </span>
+            </div>
+          )}
+        </section>
+        <label className="flex gap-2">
+          <input type="checkbox" checked={form.ordering_enabled} onChange={e => setForm({ ...form, ordering_enabled: e.target.checked })} />
+          Accept QR orders
+        </label>
+        <button disabled={saving} onClick={save} className="rounded-xl bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50">
+          <Save className="mr-1 inline size-4" />
+          {saving ? 'Saving…' : 'Save settings'}
+        </button>
+      </div>
+    </RestaurantSimpleWorkspace>
+  )
+}
+
+export function RestaurantBilling() {
+  return (
+    <RestaurantSimpleWorkspace
+      title="RVC billing"
+      description="Subscription changes are managed by RVC Control. Your current plan and invoices appear here once issued."
+    />
+  )
+}
+
+function Box({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-semibold">{value}</p>
+    </div>
+  )
+}

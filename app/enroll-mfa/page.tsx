@@ -182,7 +182,7 @@ export default function EnrollMFAPage() {
 
               {step === 'scan' && <details className="mb-6">
                 <summary className="text-xs text-center text-indigo-600 dark:text-indigo-400 cursor-pointer">
-                  Can't scan? Enter code manually
+                  Can&apos;t scan? Enter code manually
                 </summary>
                 <p className="text-xs text-center text-slate-500 dark:text-slate-400 mt-2 break-all font-mono">
                   {secret}

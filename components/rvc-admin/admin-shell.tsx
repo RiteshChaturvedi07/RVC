@@ -10,7 +10,6 @@ import {
   Bell,
   Building2,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   CircleHelp,
   Code2,

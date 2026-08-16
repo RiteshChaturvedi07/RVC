@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Activity, Check, CreditCard, LifeBuoy, RefreshCw, Settings2, ShieldCheck, Users } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ShieldCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 type Kind = 'billing' | 'support' | 'analytics' | 'security' | 'activity' | 'team' | 'developer' | 'settings'

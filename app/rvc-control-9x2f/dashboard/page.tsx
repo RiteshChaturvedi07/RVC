@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Activity, Building2, CircleDollarSign, RefreshCw, ShieldCheck, Users } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 type Snapshot = { tenants_total: number; active_tenants: number; trial_tenants: number; suspended_tenants: number; platform_users: number; mrr: number | string; verticals: { name: string; value: number }[]; activity: { id: string; action: string; details: Record<string, unknown> | null; created_at: string }[] }
 const inr = (value: number | string) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(value || 0))
-const colors = ['#6366f1', '#14b8a6', '#f59e0b', '#a855f7', '#ef4444', '#64748b']
 
 export default function AdminDashboardPage() {
   const supabase = createClient()

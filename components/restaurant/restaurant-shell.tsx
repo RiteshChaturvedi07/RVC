@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { BarChart3, Boxes, ChefHat, ChevronDown, CircleHelp, CreditCard, DollarSign, FileText, Grid2X2, LayoutDashboard, Menu, Moon, PanelLeft, Search, Settings, ShoppingBag, Sparkles, Sun, Users, X } from 'lucide-react'
+import { BarChart3, Boxes, ChefHat, CircleHelp, CreditCard, DollarSign, FileText, Grid2X2, LayoutDashboard, Menu, Moon, PanelLeft, Search, Settings, ShoppingBag, Sparkles, Sun, Users, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const nav = [
