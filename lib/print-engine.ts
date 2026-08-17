@@ -240,3 +240,150 @@ export function printThermalCustomerBill(data: CustomerBillData) {
   win.document.write(html)
   win.document.close()
 }
+
+export type ZReportExpense = {
+  category: string
+  note?: string | null
+  amount: number
+  time?: string
+}
+
+export type ZReportData = {
+  restaurant: string
+  address?: string
+  date: string
+  shiftStatus: string
+  openingFloat: number
+  grossRevenue: number
+  cashSales: number
+  upiSales: number
+  unpaidDues: number
+  pettyExpenses: number
+  expectedCash: number
+  actualCash: number
+  discrepancy: number
+  taxableSales: number
+  cgst: number
+  sgst: number
+  totalTax: number
+  expenseLedger: ZReportExpense[]
+  settledBy?: string
+}
+
+export function printThermalZReport(data: ZReportData) {
+  const win = window.open('', '_blank', 'width=420,height=800')
+  if (!win) return
+
+  const expensesHtml = data.expenseLedger.length
+    ? data.expenseLedger
+        .map(
+          (e) => `
+    <tr>
+      <td style="padding: 2px 0;">${e.category}${e.note ? ` (${e.note})` : ''}</td>
+      <td style="text-align: right;">₹${Number(e.amount).toFixed(2)}</td>
+    </tr>
+  `
+        )
+        .join('')
+    : '<tr><td colspan="2" style="font-style: italic;">No petty cash expenses logged</td></tr>'
+
+  const discText =
+    data.discrepancy === 0
+      ? 'EXACT MATCH (₹0.00)'
+      : data.discrepancy < 0
+      ? `SHORTAGE (-₹${Math.abs(data.discrepancy).toFixed(2)})`
+      : `SURPLUS (+₹${data.discrepancy.toFixed(2)})`
+
+  const html = `<!doctype html>
+<html>
+<head>
+  <title>Day-End Z-Report - ${data.date}</title>
+  <style>
+    @page { size: 80mm auto; margin: 2mm; }
+    * { box-sizing: border-box; font-family: monospace, Arial, sans-serif; color: #000; }
+    body { width: 76mm; margin: 0 auto; font-size: 11px; }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    h2 { margin: 0 0 2px; font-size: 18px; text-align: center; }
+    .subtitle { font-size: 11px; text-align: center; margin-bottom: 4px; }
+    .divider { border-top: 1px dashed #000; margin: 6px 0; }
+    .divider-double { border-top: 2px solid #000; margin: 6px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    td { padding: 2px 0; }
+    .highlight { font-size: 12px; font-weight: bold; border-top: 1px solid #000; border-bottom: 1px solid #000; }
+    @media print {
+      body { width: 76mm; }
+    }
+  </style>
+</head>
+<body>
+  <h2>${data.restaurant}</h2>
+  <div class="subtitle">${data.address || 'GST Registered Restaurant'}</div>
+  <div class="divider-double"></div>
+  <div class="center bold" style="font-size: 14px;">DAY-END Z-REPORT</div>
+  <div class="center" style="font-size: 10px; margin-top: 2px;">Shift Status: <b>${data.shiftStatus.toUpperCase()}</b></div>
+  <div class="center" style="font-size: 10px;">Date: ${data.date} | Audit Time: ${new Date().toLocaleTimeString('en-IN')}</div>
+  
+  <div class="divider"></div>
+  <div class="bold center">--- REVENUE & SETTLEMENTS ---</div>
+  <table>
+    <tr><td>Gross Revenue Collected:</td><td style="text-align: right;" class="bold">₹${data.grossRevenue.toFixed(2)}</td></tr>
+    <tr><td>(+) UPI / QR Digital Sales:</td><td style="text-align: right;">₹${data.upiSales.toFixed(2)}</td></tr>
+    <tr><td>(+) Cash Sales:</td><td style="text-align: right;">₹${data.cashSales.toFixed(2)}</td></tr>
+    <tr><td>(ℹ) Pending / Unpaid Dues:</td><td style="text-align: right;">₹${data.unpaidDues.toFixed(2)}</td></tr>
+  </table>
+
+  <div class="divider"></div>
+  <div class="bold center">--- TAX & GST ACCOUNTING ---</div>
+  <table>
+    <tr><td>Net Taxable Sales:</td><td style="text-align: right;">₹${data.taxableSales.toFixed(2)}</td></tr>
+    <tr><td>CGST (2.5%):</td><td style="text-align: right;">₹${data.cgst.toFixed(2)}</td></tr>
+    <tr><td>SGST (2.5%):</td><td style="text-align: right;">₹${data.sgst.toFixed(2)}</td></tr>
+    <tr class="bold"><td>Total GST Collected (5%):</td><td style="text-align: right;">₹${data.totalTax.toFixed(2)}</td></tr>
+  </table>
+
+  <div class="divider"></div>
+  <div class="bold center">--- CASH DRAWER BALANCING ---</div>
+  <table>
+    <tr><td>(+) Opening Float:</td><td style="text-align: right;">₹${data.openingFloat.toFixed(2)}</td></tr>
+    <tr><td>(+) Total Cash Sales:</td><td style="text-align: right;">₹${data.cashSales.toFixed(2)}</td></tr>
+    <tr><td>(-) Petty Cash Expenses:</td><td style="text-align: right;">-₹${data.pettyExpenses.toFixed(2)}</td></tr>
+    <tr class="highlight"><td>(=) Expected Cash in Drawer:</td><td style="text-align: right;">₹${data.expectedCash.toFixed(2)}</td></tr>
+    <tr><td>Actual Counted Cash:</td><td style="text-align: right;" class="bold">₹${data.actualCash.toFixed(2)}</td></tr>
+  </table>
+
+  <div style="margin-top: 6px; padding: 4px; border: 1px solid #000; text-align: center; font-weight: bold; font-size: 11px;">
+    AUDIT DISCREPANCY: ${discText}
+  </div>
+
+  <div class="divider"></div>
+  <div class="bold center">--- PETTY CASH LEDGER ---</div>
+  <table>
+    ${expensesHtml}
+  </table>
+
+  <div class="divider-double"></div>
+  <div style="margin-top: 16px; font-size: 10px;">
+    <div style="margin-bottom: 20px;">Manager Sign: ___________________________</div>
+    <div>Cashier Sign: ___________________________</div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="center" style="font-size: 9px; margin-top: 6px;">
+    --- END OF Z-REPORT ---<br/>
+    Powered by RVC POS SaaS
+  </div>
+
+  <script>
+    window.onload = () => {
+      window.print();
+      setTimeout(() => window.close(), 500);
+    }
+  </script>
+</body>
+</html>`
+
+  win.document.write(html)
+  win.document.close()
+}
+
