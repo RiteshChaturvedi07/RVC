@@ -5,7 +5,7 @@ import { rateLimiter } from '@/lib/rate-limit'
 const protectedPrefixes = ['/dashboard', '/restaurant-dashboard', '/rvc-control-9x2f/dashboard']
 const publicRateLimitedPrefixes = ['/order', '/api/order', '/api/public-menu']
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Check rate limiting on public-facing QR & menu endpoints
@@ -13,7 +13,8 @@ export async function middleware(request: NextRequest) {
   const isTestEnvironment = process.env.NODE_ENV === 'test' || request.headers.get('x-playwright-test') === 'true'
 
   if (isPublicRateLimited && !isTestEnvironment) {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       request.headers.get('x-real-ip') ||
       '127.0.0.1'
 
@@ -48,35 +49,69 @@ export async function middleware(request: NextRequest) {
           cookies.forEach(({ name, value, options }) => response.cookies.set(name, value, options))
         },
       },
-    },
+    }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   if (!user) return NextResponse.redirect(new URL('/login', request.url))
 
-  const { data: profile } = await supabase.from('profiles').select('role, tenant_id').eq('id', user.id).single()
+  // Fetch profile
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, tenant_id')
+    .eq('id', user.id)
+    .single()
+
   if (!profile) return NextResponse.redirect(new URL('/login', request.url))
 
+  // Root super-admin bypass check (chaturvediritesh07@gmail.com or role = 'super_admin')
+  const isRootSuperAdmin = user.email === 'chaturvediritesh07@gmail.com' || profile.role === 'super_admin'
+
   if (pathname.startsWith('/rvc-control-9x2f/dashboard')) {
-    if (profile.role !== 'super_admin') return NextResponse.redirect(new URL('/login', request.url))
+    if (!isRootSuperAdmin) return NextResponse.redirect(new URL('/login', request.url))
+
     const { data: factors } = await supabase.auth.mfa.listFactors()
     if (!factors?.totp?.length) return NextResponse.redirect(new URL('/enroll-mfa', request.url))
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-    if (aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') return NextResponse.redirect(new URL('/enroll-mfa', request.url))
-  }
-  if (pathname.startsWith('/restaurant-dashboard')) {
-    if (!profile.tenant_id || !['tenant_owner', 'staff'].includes(profile.role)) return NextResponse.redirect(new URL('/login', request.url))
-    const { data: tenant } = await supabase.from('tenants').select('vertical,status,subscription_end_date,subscription_expires_at').eq('id', profile.tenant_id).single()
-    if (tenant?.vertical !== 'restaurant') return NextResponse.redirect(new URL('/coming-soon', request.url))
-    if (tenant?.status === 'pending') return NextResponse.redirect(new URL('/approval-pending', request.url))
-
-    // Handle trial expiration: if 7-day trial expired, redirect to billing page to buy plan
-    const expiryDate = tenant?.subscription_expires_at || tenant?.subscription_end_date
-    const isExpired = tenant?.status === 'expired' || (expiryDate && new Date(expiryDate) < new Date() && tenant?.status !== 'active')
-    if (isExpired && !pathname.startsWith('/restaurant-dashboard/billing')) {
-      return NextResponse.redirect(new URL('/restaurant-dashboard/billing?expired=1', request.url))
+    if (aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+      return NextResponse.redirect(new URL('/enroll-mfa', request.url))
     }
   }
+
+  if (pathname.startsWith('/restaurant-dashboard')) {
+    if (!isRootSuperAdmin && (!profile.tenant_id || !['tenant_owner', 'staff'].includes(profile.role))) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    if (profile.tenant_id) {
+      const { data: tenant } = await supabase
+        .from('tenants')
+        .select('vertical,status,subscription_end_date,subscription_expires_at')
+        .eq('id', profile.tenant_id)
+        .single()
+
+      if (!isRootSuperAdmin && tenant?.vertical !== 'restaurant') {
+        return NextResponse.redirect(new URL('/coming-soon', request.url))
+      }
+      if (!isRootSuperAdmin && tenant?.status === 'pending') {
+        return NextResponse.redirect(new URL('/approval-pending', request.url))
+      }
+
+      // Handle trial expiration
+      const expiryDate = tenant?.subscription_expires_at || tenant?.subscription_end_date
+      const isExpired =
+        tenant?.status === 'expired' ||
+        (expiryDate && new Date(expiryDate) < new Date() && tenant?.status !== 'active')
+
+      if (!isRootSuperAdmin && isExpired && !pathname.startsWith('/restaurant-dashboard/billing')) {
+        return NextResponse.redirect(new URL('/restaurant-dashboard/billing?expired=1', request.url))
+      }
+    }
+  }
+
   return response
 }
 
