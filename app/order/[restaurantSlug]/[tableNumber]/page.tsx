@@ -215,7 +215,8 @@ export default function OrderPage() {
     const unitPrice = itemVariants[item.id]?.price || item.price
     return sum + unitPrice * cart[item.id]
   }, 0)
-  const tax = Math.round((subtotal - discount) * (menu.restaurant.tax_rate || 0)) / 100
+  const effectiveTaxRate = menu.restaurant.tax_rate ?? 5
+  const tax = Math.round((subtotal - discount) * effectiveTaxRate) / 100
   const total = Math.max(0, subtotal - discount + tax)
 
   // Active session orders
@@ -692,7 +693,7 @@ export default function OrderPage() {
           discount={discount}
           tax={tax}
           total={total}
-          taxRate={menu.restaurant.tax_rate || 0}
+          taxRate={effectiveTaxRate}
           placeOrder={handlePlaceOrder}
           selectedItems={selectedItems}
           cart={cart}

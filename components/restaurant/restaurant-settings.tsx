@@ -88,38 +88,44 @@ export function RestaurantSettings() {
         .eq('tenant_id', tenant)
         .single()
 
-      if (error) throw error
+      if (error && error.code !== 'PGRST116') throw error
+
+      const cgst = Number(data?.cgst_rate ?? 2.5)
+      const sgst = Number(data?.sgst_rate ?? 2.5)
+      const totalGst = cgst + sgst
+      const rawTax = data?.tax_rate !== undefined && data?.tax_rate !== null ? Number(data.tax_rate) : NaN
+      const computedTaxRate = !isNaN(rawTax) && rawTax > 0 ? rawTax : (totalGst > 0 ? totalGst : 5)
 
       const parsed: RestaurantConfig = {
-        display_name: data.display_name || 'My Restaurant',
-        tagline: data.tagline || 'Authentic F&B Experience',
-        phone: data.phone || '',
-        email: data.email || '',
-        address: data.address || '',
-        city: data.city || '',
-        state: data.state || '',
-        logo_url: data.logo_url || null,
-        header_cover_url: data.header_cover_url || null,
-        ordering_enabled: data.ordering_enabled ?? true,
-        takeaway_enabled: data.takeaway_enabled ?? true,
-        opening_time: data.opening_time || '10:00 AM',
-        closing_time: data.closing_time || '11:00 PM',
-        announcement_banner: data.announcement_banner || 'Welcome to our restaurant! Free dessert on orders over ₹999.',
-        is_gst_enabled: data.is_gst_enabled ?? true,
-        gstin: data.gstin || '27AAACR1234F1Z5',
-        fssai_license: data.fssai_license || '11521001000123',
-        tax_label: data.tax_label || 'GST',
-        tax_rate: Number(data.tax_rate ?? 5),
-        cgst_rate: Number(data.cgst_rate ?? 2.5),
-        sgst_rate: Number(data.sgst_rate ?? 2.5),
-        service_charge_rate: Number(data.service_charge_rate ?? 0),
-        merchant_upi_id: data.merchant_upi_id || 'indiancoffeehouse@upi',
-        merchant_account_name: data.merchant_account_name || 'Indian Coffee House Pvt Ltd',
-        merchant_upi_qr_url: data.merchant_upi_qr_url || null,
-        thermal_paper_size: data.thermal_paper_size || '80mm',
-        auto_print_kot: data.auto_print_kot ?? true,
-        receipt_header_msg: data.receipt_header_msg || 'TAX INVOICE - THANK YOU FOR DINING WITH US',
-        receipt_footer_msg: data.receipt_footer_msg || 'Visit again! Powered by RVC POS SaaS',
+        display_name: data?.display_name || 'My Restaurant',
+        tagline: data?.tagline || 'Authentic F&B Experience',
+        phone: data?.phone || '',
+        email: data?.email || '',
+        address: data?.address || '',
+        city: data?.city || '',
+        state: data?.state || '',
+        logo_url: data?.logo_url || null,
+        header_cover_url: data?.header_cover_url || null,
+        ordering_enabled: data?.ordering_enabled ?? true,
+        takeaway_enabled: data?.takeaway_enabled ?? true,
+        opening_time: data?.opening_time || '10:00 AM',
+        closing_time: data?.closing_time || '11:00 PM',
+        announcement_banner: data?.announcement_banner || 'Welcome to our restaurant! Free dessert on orders over ₹999.',
+        is_gst_enabled: data?.is_gst_enabled ?? true,
+        gstin: data?.gstin || '27AAACR1234F1Z5',
+        fssai_license: data?.fssai_license || '11521001000123',
+        tax_label: data?.tax_label || 'GST',
+        tax_rate: computedTaxRate,
+        cgst_rate: cgst,
+        sgst_rate: sgst,
+        service_charge_rate: Number(data?.service_charge_rate ?? 0),
+        merchant_upi_id: data?.merchant_upi_id || 'indiancoffeehouse@upi',
+        merchant_account_name: data?.merchant_account_name || 'Indian Coffee House Pvt Ltd',
+        merchant_upi_qr_url: data?.merchant_upi_qr_url || null,
+        thermal_paper_size: data?.thermal_paper_size || '80mm',
+        auto_print_kot: data?.auto_print_kot ?? true,
+        receipt_header_msg: data?.receipt_header_msg || 'TAX INVOICE - THANK YOU FOR DINING WITH US',
+        receipt_footer_msg: data?.receipt_footer_msg || 'Visit again! Powered by RVC POS SaaS',
       }
 
       setForm(parsed)
@@ -196,33 +202,46 @@ export function RestaurantSettings() {
         const ext = logoFile.name.split('.').pop() || 'png'
         const path = `${tenantId}/logo-${Date.now()}.${ext}`
 
-        const { error: uploadErr } = await db.storage.from('menu-images').upload(path, logoFile, { contentType: logoFile.type })
-        if (!uploadErr) {
+        const { error: uploadErr } = await db.storage.from('menu-images').upload(path, logoFile, { contentType: logoFile.type, upsert: true })
+        if (uploadErr) {
+          console.error('Logo upload failed:', uploadErr)
+        } else {
           uploadedLogoUrl = db.storage.from('menu-images').getPublicUrl(path).data.publicUrl
         }
       }
 
+      const calculatedTax = Number(form.cgst_rate || 0) + Number(form.sgst_rate || 0)
+      const finalTaxRate = form.is_gst_enabled ? (calculatedTax > 0 ? calculatedTax : 5) : 0
+
       const updatePayload = {
+        tenant_id: tenantId,
         ...form,
         logo_url: uploadedLogoUrl,
         gstin: (form.gstin || '').toUpperCase().trim(),
-        tax_rate: Number(form.cgst_rate || 0) + Number(form.sgst_rate || 0),
+        tax_rate: finalTaxRate,
         updated_at: new Date().toISOString(),
       }
 
-      const { error } = await db
+      // Upsert settings in database
+      const { error: settingsErr } = await db
         .from('restaurant_settings')
-        .update(updatePayload)
-        .eq('tenant_id', tenantId)
+        .upsert(updatePayload, { onConflict: 'tenant_id' })
 
-      if (error) throw error
+      if (settingsErr) throw settingsErr
 
+      // Also sync restaurant display name to tenants table
+      if (form.display_name) {
+        await db.from('tenants').update({ name: form.display_name }).eq('id', tenantId)
+      }
+
+      setForm(updatePayload)
       setInitialForm(updatePayload)
-      setNotice('CheckCircle2: Settings updated & saved successfully!')
+      setNotice('Settings updated & saved successfully!')
       setLogoFile(null)
-    } catch {
-      setNotice('CheckCircle2: Settings updated & saved successfully!')
-      setInitialForm(form)
+      setLogoPreview(null)
+    } catch (err: any) {
+      console.error('Save settings error:', err)
+      setNotice(`Error: Failed to save settings. ${err?.message || ''}`)
     } finally {
       setSaving(false)
     }
@@ -619,7 +638,14 @@ export function RestaurantSettings() {
                     type="number"
                     step="0.5"
                     value={form.cgst_rate}
-                    onChange={(e) => setForm({ ...form, cgst_rate: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const newCgst = Number(e.target.value)
+                      setForm({
+                        ...form,
+                        cgst_rate: newCgst,
+                        tax_rate: newCgst + Number(form.sgst_rate || 0),
+                      })
+                    }}
                     className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 py-2.5 px-3 text-xs font-mono font-bold text-slate-900 dark:text-slate-100"
                   />
                 </div>
@@ -632,7 +658,14 @@ export function RestaurantSettings() {
                     type="number"
                     step="0.5"
                     value={form.sgst_rate}
-                    onChange={(e) => setForm({ ...form, sgst_rate: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const newSgst = Number(e.target.value)
+                      setForm({
+                        ...form,
+                        sgst_rate: newSgst,
+                        tax_rate: Number(form.cgst_rate || 0) + newSgst,
+                      })
+                    }}
                     className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 py-2.5 px-3 text-xs font-mono font-bold text-slate-900 dark:text-slate-100"
                   />
                 </div>
