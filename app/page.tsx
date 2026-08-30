@@ -28,6 +28,22 @@ export default function Home() {
       setIsDark(prefersDark)
       document.documentElement.classList.toggle('dark', prefersDark)
     }
+
+    // Client-side fallback for PKCE Auth code in URL (?code=...)
+    async function handleAuthCodeInUrl() {
+      if (typeof window === 'undefined') return
+      const params = new URLSearchParams(window.location.search)
+      const code = params.get('code')
+      if (code) {
+        const { createClient } = await import('@/lib/supabase/client')
+        const supabase = createClient()
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (!error) {
+          window.location.href = '/reset-password'
+        }
+      }
+    }
+    void handleAuthCodeInUrl()
   }, [])
 
   const toggleTheme = () => {

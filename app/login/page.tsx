@@ -84,83 +84,81 @@ export default function LoginPage() {
         >
           {/* Credentials Step */}
           <>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Welcome Back</h2>
-              <p className="text-slate-600 dark:text-slate-300 mb-8">Log in to your RVC account</p>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Welcome Back</h2>
+            <p className="text-slate-600 dark:text-slate-300 mb-8">Log in to your RVC account</p>
 
-              <form onSubmit={handleCredentialsSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="your@email.com"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value)
-                      if (errors.email) setErrors({ ...errors, email: '' })
-                    }}
-                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white dark:border-slate-600 transition-colors ${
-                      errors.email ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'
+            <form onSubmit={handleCredentialsSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    if (errors.email) setErrors({ ...errors, email: '' })
+                  }}
+                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white dark:border-slate-600 transition-colors ${errors.email ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'
                     }`}
-                  />
-                  {errors.email && (
-                    <p className="text-red-500 text-sm mt-1">{errors.email}</p>
-                  )}
-                </div>
+                />
+                {errors.email && (
+                  <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+                )}
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => {
-                        setPassword(e.target.value)
-                        if (errors.password) setErrors({ ...errors, password: '' })
-                      }}
-                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white dark:border-slate-600 transition-colors ${
-                        errors.password ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value)
+                      if (errors.password) setErrors({ ...errors, password: '' })
+                    }}
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-white dark:border-slate-600 transition-colors ${errors.password ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'
                       }`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="w-5 h-5" />
-                      ) : (
-                        <Eye className="w-5 h-5" />
-                      )}
-                    </button>
-                  </div>
-                  {errors.password && (
-                    <p className="text-red-500 text-sm mt-1">{errors.password}</p>
-                  )}
-                </div>
-
-                <div className="text-right">
-                  <Link
-                    href="/forgot-password"
-                    className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
                   >
-                    Forgot password?
-                  </Link>
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
                 </div>
+                {errors.password && (
+                  <p className="text-red-500 text-sm mt-1">{errors.password}</p>
+                )}
+              </div>
 
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full px-6 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors disabled:cursor-not-allowed"
+              <div className="text-right">
+                <Link
+                  href="/forgot-password"
+                  className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
                 >
-                  {isLoading ? 'Logging in...' : 'Log In'}
-                </button>
-              </form>
-            </>
+                  Forgot password?
+                </Link>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full px-6 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Logging in...' : 'Log In'}
+              </button>
+            </form>
+          </>
         </motion.div>
 
         {/* Sign Up Link */}
