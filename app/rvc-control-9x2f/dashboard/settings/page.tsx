@@ -158,13 +158,22 @@ export default function SettingsPage() {
 
       setSettings((prev) => ({ ...prev, rvc_upi_qr_url: publicUrl }))
 
+      // Immediately persist to platform_settings table
+      await supabase.from('platform_settings').upsert({
+        id: true,
+        rvc_upi_qr_url: publicUrl,
+        rvc_upi_id: settings.rvc_upi_id || 'rvcpay@okaxis',
+        updated_at: new Date().toISOString(),
+        updated_by: currentUserId || null,
+      })
+
       await supabase.from('audit_logs').insert({
         actor_id: currentUserId,
         action: 'UPI_QR_ROTATED',
         details: { new_qr_url: publicUrl },
       })
 
-      toast.success('Payment QR Code image uploaded to Supabase Storage!')
+      toast.success('Payment QR Code image uploaded & live updated!')
     } catch (err: unknown) {
       toast.error(`QR upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {

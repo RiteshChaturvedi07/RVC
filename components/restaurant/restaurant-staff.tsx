@@ -9,14 +9,13 @@ import {
   ChefHat,
   Crown,
   Edit3,
-  Lock,
   Mail,
+  Phone,
   Plus,
   RefreshCw,
   Search,
   ShieldCheck,
   Trash2,
-  Unlock,
   UserCheck,
   UserPlus,
   Users,
@@ -68,6 +67,7 @@ export function RestaurantStaff() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
   const [query, setQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [modalOpen, setModalOpen] = useState(false)
@@ -78,6 +78,7 @@ export function RestaurantStaff() {
   const [form, setForm] = useState({
     email: '',
     fullName: '',
+    phone: '',
     roleLabel: 'Floor Waiter',
     permissions: ROLE_PRESETS['Floor Waiter'],
   })
@@ -89,20 +90,67 @@ export function RestaurantStaff() {
       const db = createClient()
       const tenantId = await currentRestaurantTenant()
 
-      const { data, error: dbError } = await db
-        .from('profiles')
-        .select(
-          'id,full_name,phone,email,role,created_at,restaurant_staff_assignments(role_label,permissions,is_active)'
-        )
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false })
+      // Fetch profiles & staff assignments separately to avoid PostgREST relationship ambiguity (400)
+      let profilesData: any[] = []
+      const [profilesRes, assignmentsRes] = await Promise.all([
+        db
+          .from('profiles')
+          .select('id,full_name,phone,email,role,created_at')
+          .eq('tenant_id', tenantId)
+          .order('created_at', { ascending: false }),
+        db
+          .from('restaurant_staff_assignments')
+          .select('profile_id,role_label,permissions,is_active')
+          .eq('tenant_id', tenantId),
+      ])
 
-      if (dbError) throw dbError
-      setStaff((data ?? []) as unknown as StaffMember[])
+      if (profilesRes.error) {
+        // Fallback query if email column is not present on profiles relation
+        const fallbackRes = await db
+          .from('profiles')
+          .select('id,full_name,phone,role,created_at')
+          .eq('tenant_id', tenantId)
+          .order('created_at', { ascending: false })
+
+        if (fallbackRes.error) throw fallbackRes.error
+        profilesData = fallbackRes.data || []
+      } else {
+        profilesData = profilesRes.data || []
+      }
+
+      const assignmentMap = new Map<string, StaffAssignment>()
+      ;(assignmentsRes.data ?? []).forEach((a: any) => {
+        let perms: string[] = []
+        if (Array.isArray(a.permissions)) perms = a.permissions.map(String)
+        else if (typeof a.permissions === 'string') {
+          try {
+            perms = JSON.parse(a.permissions)
+          } catch {
+            perms = []
+          }
+        }
+        assignmentMap.set(String(a.profile_id), {
+          role_label: String(a.role_label || 'Waiter / Service'),
+          permissions: perms,
+          is_active: Boolean(a.is_active ?? true),
+        })
+      })
+
+      const parsedStaff: StaffMember[] = profilesData.map((p: any) => ({
+        id: String(p.id),
+        full_name: p.full_name || null,
+        phone: p.phone || null,
+        email: p.email || null,
+        role: p.role || 'staff',
+        created_at: p.created_at,
+        restaurant_staff_assignments: assignmentMap.get(String(p.id)) || null,
+      }))
+
+      setStaff(parsedStaff)
       setError('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to load restaurant team')
-    } fontally: {
+    } finally {
       setLoading(false)
     }
   }
@@ -114,12 +162,14 @@ export function RestaurantStaff() {
   // Open Modal for Add or Edit
   const openModal = (member?: StaffMember) => {
     setEditingStaff(member || null)
+    setErrorMessage('')
     if (member) {
       const currentRole = member.restaurant_staff_assignments?.role_label || 'Floor Waiter'
       const currentPerms = member.restaurant_staff_assignments?.permissions || ROLE_PRESETS[currentRole] || ['Orders']
       setForm({
         email: member.email || '',
         fullName: member.full_name || '',
+        phone: member.phone || '',
         roleLabel: currentRole,
         permissions: currentPerms,
       })
@@ -127,6 +177,7 @@ export function RestaurantStaff() {
       setForm({
         email: '',
         fullName: '',
+        phone: '',
         roleLabel: 'Floor Waiter',
         permissions: ROLE_PRESETS['Floor Waiter'],
       })
@@ -164,34 +215,48 @@ export function RestaurantStaff() {
   const handleSaveStaff = async () => {
     setIsSaving(true)
     setNotice('')
+    setErrorMessage('')
     try {
       const db = createClient()
+      const tenantId = await currentRestaurantTenant()
       let profileId = editingStaff?.id
 
       if (!profileId) {
-        if (!form.email.trim()) {
-          setNotice('Please enter a registered RVC email address.')
+        const emailToUse = form.email.trim()
+        if (!emailToUse) {
+          setErrorMessage('Please enter the registered login email address of the staff member.')
           setIsSaving(false)
           return
         }
 
-        // RPC call to add staff member by email
+        // Call restaurant_add_staff RPC with email
         const { data: addResult, error: addError } = await db.rpc('restaurant_add_staff', {
-          p_email: form.email.trim(),
+          p_email: emailToUse,
         })
 
-        if (addError) {
-          throw new Error(addError.message || 'Staff email not found in RVC user directory.')
+        if (addError || !addResult?.id) {
+          throw new Error(
+            addError?.message || `No registered RVC account found for '${emailToUse}'. Ask them to sign up at /register first.`
+          )
         }
 
-        profileId = addResult?.id
+        profileId = addResult.id
       }
 
       if (!profileId) {
         throw new Error('Staff account ID could not be identified.')
       }
 
-      // Save assignment permissions
+      // Update full_name & phone on profile if provided
+      if (form.fullName.trim() || form.phone.trim()) {
+        const updatePayload: any = {}
+        if (form.fullName.trim()) updatePayload.full_name = form.fullName.trim()
+        if (form.phone.trim()) updatePayload.phone = form.phone.trim()
+
+        await db.from('profiles').update(updatePayload).eq('id', profileId)
+      }
+
+      // Save assignment permissions via RPC
       const { error: assignError } = await db.rpc('restaurant_save_staff_assignment', {
         p_profile_id: profileId,
         p_role_label: form.roleLabel,
@@ -199,8 +264,7 @@ export function RestaurantStaff() {
       })
 
       if (assignError) {
-        // Fallback direct table upsert if RPC unavailable
-        const tenantId = await currentRestaurantTenant()
+        // Fallback direct table upsert
         await db.from('restaurant_staff_assignments').upsert({
           profile_id: profileId,
           tenant_id: tenantId,
@@ -215,7 +279,7 @@ export function RestaurantStaff() {
       setNotice(`✅ Access rights saved for ${form.fullName || form.email || 'staff member'}.`)
       await loadStaff()
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Failed to save staff access permissions.')
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to save staff access permissions.')
     } finally {
       setIsSaving(false)
     }
@@ -225,18 +289,23 @@ export function RestaurantStaff() {
   const handleToggleStatus = async (member: StaffMember) => {
     try {
       const db = createClient()
+      const tenantId = await currentRestaurantTenant()
       const currentActive = member.restaurant_staff_assignments?.is_active ?? true
       const nextActive = !currentActive
 
-      const { error } = await db
-        .from('restaurant_staff_assignments')
-        .update({ is_active: nextActive, updated_at: new Date().toISOString() })
-        .eq('profile_id', member.id)
+      const { error } = await db.from('restaurant_staff_assignments').upsert({
+        profile_id: member.id,
+        tenant_id: tenantId,
+        role_label: member.restaurant_staff_assignments?.role_label || 'Waiter / Service',
+        permissions: member.restaurant_staff_assignments?.permissions || ['Orders'],
+        is_active: nextActive,
+        updated_at: new Date().toISOString(),
+      })
 
       if (error) throw error
       await loadStaff()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unable to update status')
+      setErrorMessage(err instanceof Error ? err.message : 'Unable to update status')
     }
   }
 
@@ -252,12 +321,13 @@ export function RestaurantStaff() {
       if (rpcError) {
         // Direct delete fallback
         await db.from('restaurant_staff_assignments').delete().eq('profile_id', member.id)
+        await db.from('profiles').update({ tenant_id: null, role: 'customer' }).eq('id', member.id)
       }
 
       setNotice(`Staff access revoked for ${member.full_name || 'user'}.`)
       await loadStaff()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to revoke access')
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to revoke access')
     }
   }
 
@@ -370,19 +440,37 @@ export function RestaurantStaff() {
           </p>
         </div>
 
-        <button
-          onClick={() => openModal()}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary hover:opacity-90 px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-md transition-all active:scale-95 shrink-0"
-        >
-          <UserPlus className="size-4" />
-          <span>➕ Add Staff Member</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => void loadStaff()}
+            disabled={loading}
+            className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white shadow-sm"
+            title="Refresh Staff List"
+          >
+            <RefreshCw className={`size-4 ${loading ? 'animate-spin text-indigo-500' : ''}`} />
+          </button>
+
+          <button
+            onClick={() => openModal()}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary hover:opacity-90 px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-md transition-all active:scale-95 shrink-0"
+          >
+            <UserPlus className="size-4" />
+            <span>➕ Add Staff Member</span>
+          </button>
+        </div>
       </div>
 
       {notice && (
         <div className="flex items-center gap-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-3.5 text-xs font-bold text-emerald-900 dark:text-emerald-200">
           <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <span>{notice}</span>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="flex items-center gap-2 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-3.5 text-xs font-bold text-rose-900 dark:text-rose-200">
+          <AlertCircle className="size-4 text-rose-600 dark:text-rose-400 shrink-0" />
+          <span>{errorMessage}</span>
         </div>
       )}
 
@@ -645,7 +733,7 @@ export function RestaurantStaff() {
               {!filteredStaff.length && (
                 <tr>
                   <td colSpan={5} className="p-12 text-center text-slate-500 dark:text-slate-400 font-medium">
-                    No matching staff members found. Click "Add Staff Member" above to authorize team members by email.
+                    No matching staff members found. Click "Add Staff Member" above to authorize team members.
                   </td>
                 </tr>
               )}
@@ -673,36 +761,64 @@ export function RestaurantStaff() {
               </button>
             </div>
 
-            {/* Email Input */}
-            {!editingStaff ? (
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                  Registered RVC Email Address *
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-3 size-4 text-slate-400" />
-                  <input
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    placeholder="staff.name@example.com"
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 py-2.5 pl-10 pr-4 text-xs font-semibold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-primary"
-                  />
-                </div>
-                <p className="mt-1 text-[11px] text-slate-400 font-medium">
-                  When this user logs into their RVC account, they will automatically gain access to checked workspaces below.
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-xl bg-slate-50 dark:bg-slate-950 p-3 border border-slate-200 dark:border-slate-800">
-                <b className="text-sm font-bold text-slate-900 dark:text-white block">
-                  {editingStaff.full_name || 'Staff Member'}
-                </b>
-                <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">
-                  {editingStaff.email || editingStaff.phone || 'Account ID: ' + editingStaff.id}
-                </span>
+            {/* Error Message Alert */}
+            {errorMessage && (
+              <div className="flex items-center gap-2 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs font-bold text-rose-900 dark:text-rose-200">
+                <AlertCircle className="size-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                <span>{errorMessage}</span>
               </div>
             )}
+
+            {/* Staff Member Basic Info Inputs */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  value={form.fullName}
+                  onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                  placeholder="e.g. Ramesh Waiter"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 py-2.5 px-3 text-xs font-semibold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                  Phone Number
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-3 size-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    placeholder="e.g. 9876543210"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 py-2.5 pl-9 pr-3 text-xs font-semibold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                Email Address *
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 size-4 text-slate-400" />
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  placeholder="staff.name@example.com"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 py-2.5 pl-9 pr-3 text-xs font-semibold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-primary"
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400 font-medium">
+                Staff member will use this email or phone to log in and access authorized workspaces.
+              </p>
+            </div>
 
             {/* Role Preset Dropdown */}
             <div>

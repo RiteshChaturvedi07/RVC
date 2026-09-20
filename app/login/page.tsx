@@ -84,8 +84,15 @@ export default function LoginPage() {
         >
           {/* Credentials Step */}
           <>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Welcome Back</h2>
-            <p className="text-slate-600 dark:text-slate-300 mb-8">Log in to your RVC account</p>
+            <div className="flex justify-center mb-6">
+              <Link href="/" className="flex items-center space-x-2.5 group">
+                <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-lg border border-slate-200 dark:border-slate-700 bg-slate-900 p-1">
+                  <img src="/rvc-logo.png" alt="RVC Logo" className="w-full h-full object-cover rounded-xl" />
+                </div>
+              </Link>
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 text-center">Welcome Back</h2>
+            <p className="text-slate-600 dark:text-slate-300 mb-8 text-center">Log in to your RVC account</p>
 
             <form onSubmit={handleCredentialsSubmit} className="space-y-4">
               <div>

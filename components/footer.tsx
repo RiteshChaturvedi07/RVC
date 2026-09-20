@@ -62,8 +62,8 @@ export function Footer() {
             className="space-y-4"
           >
             <Link href="/" className="flex items-center space-x-2.5 group">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
-                <span className="text-white font-extrabold text-xl">R</span>
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform bg-slate-900 border border-slate-700/50">
+                <img src="/rvc-logo.png" alt="RVC Logo" className="w-full h-full object-cover" />
               </div>
               <div>
                 <span className="font-extrabold text-xl text-white">RVC</span>

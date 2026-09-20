@@ -55,8 +55,8 @@ export function Header({ isDark, onThemeToggle }: HeaderProps) {
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand Logo */}
         <Link href="/" className="flex items-center space-x-2.5 group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-700 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
-            <span className="text-white font-extrabold text-lg">R</span>
+          <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-md group-hover:scale-105 transition-transform bg-slate-900 border border-slate-700/50">
+            <img src="/rvc-logo.png" alt="RVC Logo" className="w-full h-full object-cover" />
           </div>
           <div className="flex flex-col">
             <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-indigo-600 to-indigo-700 dark:from-indigo-400 dark:to-indigo-300 bg-clip-text text-transparent">

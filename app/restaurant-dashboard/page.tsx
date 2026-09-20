@@ -75,6 +75,16 @@ type Table = {
   public_token?: string
 }
 
+type ServiceRequest = {
+  id: string
+  tenant_id: string
+  table_id: string
+  table_number: string
+  request_type: string
+  status: string
+  created_at: string
+}
+
 const money = (value: number) => `₹${Number(value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
 
 const elapsed = (value: string) => {
@@ -95,10 +105,28 @@ export function formatTableBadge(num: string | null | undefined): string {
   return trimmed
 }
 
+// Shared Web Audio Context instance with auto-unlocker
+let sharedAudioCtx: AudioContext | null = null
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null
+  if (!sharedAudioCtx) {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+    if (AudioCtx) {
+      sharedAudioCtx = new AudioCtx()
+    }
+  }
+  if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
+    sharedAudioCtx.resume().catch(() => {})
+  }
+  return sharedAudioCtx
+}
+
 // Order incoming chime (D5 -> A5)
 function playAudioChime() {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const ctx = getAudioContext()
+    if (!ctx) return
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.type = 'sine'
@@ -108,17 +136,18 @@ function playAudioChime() {
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
     osc.connect(gain)
     gain.connect(ctx.destination)
-    osc.start()
+    osc.start(ctx.currentTime)
     osc.stop(ctx.currentTime + 0.3)
   } catch {
-    // Audio Context not allowed until user interaction
+    // Audio Context muted until interaction
   }
 }
 
 // Urgent Bill Alert Chime (E5 -> B5 double chime)
 function playBillAlertSound() {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const ctx = getAudioContext()
+    if (!ctx) return
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.type = 'triangle'
@@ -128,10 +157,35 @@ function playBillAlertSound() {
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5)
     osc.connect(gain)
     gain.connect(ctx.destination)
-    osc.start()
+    osc.start(ctx.currentTime)
     osc.stop(ctx.currentTime + 0.5)
   } catch {
     // Audio Context muted until interaction
+  }
+}
+
+// Waiter Call Alert Chime (Dual-Tone: 660Hz then 880Hz, 0.4s duration)
+function playWaiterCallChime(): boolean {
+  try {
+    const ctx = getAudioContext()
+    if (!ctx) return false
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {})
+    }
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(660, ctx.currentTime) // 660Hz first 0.2s
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.2) // 880Hz next 0.2s
+    gain.gain.setValueAtTime(0.4, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start(ctx.currentTime)
+    osc.stop(ctx.currentTime + 0.4)
+    return ctx.state === 'running'
+  } catch {
+    return false
   }
 }
 
@@ -145,12 +199,39 @@ export default function RestaurantOverview() {
   } | null>(null)
   const [error, setError] = useState('')
   const [audioMuted, setAudioMuted] = useState(false)
+  const [audioBlocked, setAudioBlocked] = useState(false)
   const [kotModalData, setKotModalData] = useState<KOTData | null>(null)
   const [billModalData, setBillModalData] = useState<CustomerBillData | null>(null)
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
   const [selectedQrTable, setSelectedQrTable] = useState<Table | null>(null)
+  const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([])
+  const [currentTenantId, setCurrentTenantId] = useState<string>('')
   const previousOrderCountRef = useRef<number | null>(null)
   const previousBillRequestCountRef = useRef<number | null>(null)
+  const playedRequestIdsRef = useRef<Set<string>>(new Set())
+
+  // Global Web Audio interaction listener (unlocks AudioContext on user interaction)
+  useEffect(() => {
+    const unlockAudio = () => {
+      const ctx = getAudioContext()
+      if (ctx && ctx.state === 'suspended') {
+        ctx
+          .resume()
+          .then(() => setAudioBlocked(false))
+          .catch(() => {})
+      } else if (ctx && ctx.state === 'running') {
+        setAudioBlocked(false)
+      }
+    }
+    window.addEventListener('click', unlockAudio, { capture: true, passive: true })
+    window.addEventListener('keydown', unlockAudio, { capture: true, passive: true })
+    window.addEventListener('touchstart', unlockAudio, { capture: true, passive: true })
+    return () => {
+      window.removeEventListener('click', unlockAudio, { capture: true })
+      window.removeEventListener('keydown', unlockAudio, { capture: true })
+      window.removeEventListener('touchstart', unlockAudio, { capture: true })
+    }
+  }, [])
 
   useEffect(() => {
     const savedAudio = localStorage.getItem('rvc-audio-muted')
@@ -165,16 +246,29 @@ export default function RestaurantOverview() {
     localStorage.setItem('rvc-audio-muted', String(next))
   }
 
+  const resolveServiceRequest = async (requestId: string) => {
+    const db = createClient()
+    const { error } = await db
+      .from('restaurant_service_requests')
+      .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+      .eq('id', requestId)
+
+    if (!error) {
+      setServiceRequests((prev) => prev.filter((r) => r.id !== requestId))
+    }
+  }
+
   const load = async () => {
     try {
       const db = createClient()
       const tenantId = await currentRestaurantTenant()
+      setCurrentTenantId(tenantId)
       const today = new Date()
       today.setHours(0, 0, 0, 0)
       const yesterday = new Date(today)
       yesterday.setDate(yesterday.getDate() - 1)
 
-      const [ordersRes, tablesRes, settingsRes, tenantRes, priorRes] = await Promise.all([
+      const [ordersRes, tablesRes, settingsRes, tenantRes, priorRes, serviceReqRes] = await Promise.all([
         db
           .from('restaurant_orders')
           .select('*,restaurant_tables(id,table_number),restaurant_order_items(item_name,quantity,notes,unit_price,line_total)')
@@ -190,6 +284,12 @@ export default function RestaurantOverview() {
           .eq('tenant_id', tenantId)
           .gte('created_at', yesterday.toISOString())
           .lt('created_at', today.toISOString()),
+        db
+          .from('restaurant_service_requests')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false }),
       ])
 
       if (ordersRes.error) throw ordersRes.error
@@ -218,6 +318,23 @@ export default function RestaurantOverview() {
       previousOrderCountRef.current = activeCount
       previousBillRequestCountRef.current = billReqCount
 
+      if (serviceReqRes.data) {
+        const fetchedRequests = serviceReqRes.data as ServiceRequest[]
+        let newWaiterCall = false
+        fetchedRequests.forEach((req) => {
+          if (req.status === 'pending' && !playedRequestIdsRef.current.has(req.id)) {
+            if (previousOrderCountRef.current !== null) {
+              newWaiterCall = true
+            }
+            playedRequestIdsRef.current.add(req.id)
+          }
+        })
+        if (newWaiterCall && !audioMuted) {
+          playWaiterCallChime()
+        }
+        setServiceRequests(fetchedRequests)
+      }
+
       setData({
         orders: fetchedOrders,
         tables: (tablesRes.data ?? []) as Table[],
@@ -235,6 +352,47 @@ export default function RestaurantOverview() {
     const timer = setInterval(() => void load(), 10000)
     return () => clearInterval(timer)
   }, [audioMuted])
+
+  // Real-time listener for Waiter Call Service Requests
+  useEffect(() => {
+    if (!currentTenantId) return
+    const db = createClient()
+    const channel = db
+      .channel('waiter-requests-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'restaurant_service_requests',
+          filter: `tenant_id=eq.${currentTenantId}`,
+        },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT' && payload.new?.status === 'pending') {
+            const reqId = payload.new.id
+            if (!playedRequestIdsRef.current.has(reqId)) {
+              playedRequestIdsRef.current.add(reqId)
+              if (!audioMuted) {
+                const soundPlayed = playWaiterCallChime()
+                if (!soundPlayed) {
+                  setAudioBlocked(true)
+                }
+              }
+            }
+            setServiceRequests((prev) => [payload.new as ServiceRequest, ...prev.filter((r) => r.id !== payload.new.id)])
+          } else if (payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
+            if (payload.new?.status === 'resolved' || payload.eventType === 'DELETE') {
+              setServiceRequests((prev) => prev.filter((r) => r.id !== payload.old?.id && r.id !== payload.new?.id))
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      void db.removeChannel(channel)
+    }
+  }, [currentTenantId, audioMuted])
 
   if (!data) {
     return (
@@ -402,6 +560,74 @@ export default function RestaurantOverview() {
           </button>
         </div>
       </div>
+
+      {/* URGENT WAITER SERVICE REQUEST BANNER */}
+      {serviceRequests.length > 0 && (
+        <div className="relative overflow-hidden rounded-2xl border-2 border-blue-500/60 bg-blue-500/10 p-5 shadow-lg backdrop-blur-md dark:bg-blue-950/40 dark:border-blue-500/80">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-blue-500/30 pb-3">
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-xl bg-blue-600 text-white font-bold animate-bounce">
+                <BellRing className="size-6" />
+              </span>
+              <div>
+                <h2 className="text-base font-extrabold text-blue-900 dark:text-blue-200">
+                  🔔 {serviceRequests.length} Table{serviceRequests.length > 1 ? 's' : ''} Requesting Waiter Assistance!
+                </h2>
+                <p className="text-xs font-medium text-blue-800 dark:text-blue-300">
+                  Guests have tapped "Call Waiter" at their table. Acknowledge when staff attends the table.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {audioBlocked && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ctx = getAudioContext()
+                    ctx?.resume().then(() => {
+                      setAudioBlocked(false)
+                      playWaiterCallChime()
+                    })
+                  }}
+                  className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer animate-pulse"
+                >
+                  <Volume2 className="size-3.5" />
+                  <span>🔊 Click to Enable Alert Sound</span>
+                </button>
+              )}
+              <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-extrabold text-blue-800 dark:text-blue-200 animate-pulse">
+                ● LIVE ASSISTANCE NEEDED
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-3 divide-y divide-blue-500/20">
+            {serviceRequests.map((req) => (
+              <div key={req.id} className="flex flex-wrap items-center justify-between gap-3 pt-3 first:pt-0">
+                <div className="flex items-center gap-3">
+                  <span className="rounded-xl bg-blue-600 px-3.5 py-1 text-sm font-black text-white shadow-xs">
+                    {formatTableBadge(req.table_number)}
+                  </span>
+                  <div>
+                    <b className="text-sm font-bold text-foreground">Table {req.table_number} Requests Waiter</b>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Requested {elapsed(req.created_at)}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => void resolveServiceRequest(req.id)}
+                  className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-black text-white hover:bg-blue-700 shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
+                >
+                  <CheckCircle2 className="size-4" />
+                  <span>Acknowledge / Resolve</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* BILL / PAYMENT REQUEST ALERT BANNER */}
       {billRequestOrders.length > 0 && (
@@ -780,10 +1006,13 @@ export default function RestaurantOverview() {
                   (o) => o.restaurant_tables?.id === table.id && !['completed', 'cancelled'].includes(o.status)
                 )
 
+                const isWaiterReq = serviceRequests.some(
+                  (r) => r.table_id === table.id || r.table_number === table.table_number
+                )
                 const isBillReq =
                   table.status === 'bill_requested' || (tableActiveOrder && tableActiveOrder.bill_requested && tableActiveOrder.payment_status !== 'paid')
                 const isOccupied = table.status === 'occupied' || (tableActiveOrder && !isBillReq)
-                const isAvailable = !isOccupied && !isBillReq
+                const isAvailable = !isOccupied && !isBillReq && !isWaiterReq
 
                 return (
                   <button
@@ -796,7 +1025,9 @@ export default function RestaurantOverview() {
                       }
                     }}
                     className={`group relative flex flex-col items-center justify-between rounded-xl p-3 text-center transition-all border ${
-                      isBillReq
+                      isWaiterReq
+                        ? 'border-2 border-blue-500 bg-blue-50 text-blue-900 dark:bg-blue-950/60 dark:text-blue-200 animate-pulse font-black shadow-md ring-2 ring-blue-400'
+                        : isBillReq
                         ? 'border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200 animate-pulse font-bold'
                         : isOccupied
                         ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300'
@@ -805,7 +1036,7 @@ export default function RestaurantOverview() {
                   >
                     <b className="text-base font-extrabold">{formatTableBadge(table.table_number)}</b>
                     <small className="mt-1 text-[11px] font-semibold capitalize tracking-tight">
-                      {isBillReq ? 'Bill Req' : isOccupied ? 'Occupied' : 'Available'}
+                      {isWaiterReq ? '🔔 Waiter' : isBillReq ? 'Bill Req' : isOccupied ? 'Occupied' : 'Available'}
                     </small>
                     {tableActiveOrder && (
                       <span className="mt-1 rounded bg-black/10 px-1.5 py-0.5 text-[10px] font-bold">
@@ -817,7 +1048,7 @@ export default function RestaurantOverview() {
               })}
             </div>
 
-            <div className="mt-4 flex justify-around border-t border-border/60 pt-3 text-[11px] font-semibold">
+            <div className="mt-4 flex justify-around border-t border-border/60 pt-3 text-[11px] font-semibold flex-wrap gap-1">
               <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
                 <span className="size-2 rounded-full bg-emerald-500" /> Available
               </span>
@@ -826,6 +1057,9 @@ export default function RestaurantOverview() {
               </span>
               <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
                 <span className="size-2 rounded-full bg-amber-500 animate-pulse" /> Bill Req
+              </span>
+              <span className="flex items-center gap-1.5 text-blue-700 dark:text-blue-400">
+                <span className="size-2 rounded-full bg-blue-500 animate-pulse" /> Waiter
               </span>
             </div>
           </section>

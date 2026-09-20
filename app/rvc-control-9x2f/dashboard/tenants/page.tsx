@@ -7,7 +7,6 @@ import {
   Calendar,
   CalendarPlus,
   Check,
-  CheckCircle2,
   ChevronRight,
   Copy,
   CreditCard,
@@ -17,7 +16,6 @@ import {
   Layers,
   Lock,
   Plus,
-  QrCode,
   RefreshCw,
   Search,
   ShieldAlert,
@@ -78,31 +76,41 @@ interface Tenant {
   metrics?: TenantOperationalMetrics
 }
 
-// Helpers
+// --- Helpers ---
 const inr = (value: number | string) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(value || 0))
 
-function getVerticalBadgeStyle(vertical: string) {
-  const v = vertical.toLowerCase()
-  if (v.includes('restaurant')) return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-  if (v.includes('gym')) return 'border-purple-500/30 bg-purple-500/10 text-purple-400'
+function getVerticalBadgeStyle(vertical?: string) {
+  const v = (vertical || '').toLowerCase()
+  if (v.includes('restaurant')) return 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+  if (v.includes('gym')) return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
   if (v.includes('hospital')) return 'border-blue-500/30 bg-blue-500/10 text-blue-400'
-  if (v.includes('school') || v.includes('college')) return 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+  if (v.includes('school') || v.includes('college')) return 'border-purple-500/30 bg-purple-500/10 text-purple-400'
   return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400'
 }
 
-function getDaysRemaining(expiresAt: string | null): { days: number; text: string; isDanger: boolean; isWarning: boolean } {
+function getStatusBadgeStyle(status?: string, isFrozen?: boolean) {
+  if (isFrozen) return 'border-rose-500/40 bg-rose-500/10 text-rose-300 font-semibold animate-pulse'
+  const s = (status || '').toLowerCase()
+  if (s === 'active') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 font-medium'
+  if (s === 'trial') return 'border-amber-500/30 bg-amber-500/10 text-amber-300 font-medium'
+  if (s === 'expired' || s === 'suspended') return 'border-rose-500/40 bg-rose-500/10 text-rose-300 font-semibold animate-pulse'
+  return 'border-slate-700 bg-slate-800 text-slate-300 font-medium'
+}
+
+function getDaysRemaining(expiresAt?: string | null): { days: number; text: string; isDanger: boolean; isWarning: boolean } {
   if (!expiresAt) return { days: 0, text: 'No Expiry Set', isDanger: false, isWarning: false }
   const expiry = new Date(expiresAt)
+  if (isNaN(expiry.getTime())) return { days: 0, text: 'No Expiry Set', isDanger: false, isWarning: false }
   const now = new Date()
   const diffMs = expiry.getTime() - now.getTime()
   const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
 
-  if (days < 0) return { days, text: `Expired ${Math.abs(days)}d ago`, isDanger: true, isWarning: false }
-  if (days === 0) return { days, text: 'Expires today', isDanger: true, isWarning: false }
-  if (days <= 3) return { days, text: `${days}d left`, isDanger: false, isWarning: true }
-  if (days <= 7) return { days, text: `${days}d left`, isDanger: false, isWarning: false }
-  return { days, text: `${days}d left`, isDanger: false, isWarning: false }
+  if (days < 0) return { days, text: `⚠️ Expired ${Math.abs(days)}d ago`, isDanger: true, isWarning: false }
+  if (days === 0) return { days, text: '⚠️ Expires today', isDanger: true, isWarning: false }
+  if (days <= 3) return { days, text: `⏳ ${days}d left`, isDanger: false, isWarning: true }
+  if (days <= 7) return { days, text: `⏳ ${days}d left`, isDanger: false, isWarning: false }
+  return { days, text: `⏳ ${days}d left`, isDanger: false, isWarning: false }
 }
 
 export default function TenantsPage() {
@@ -123,12 +131,12 @@ export default function TenantsPage() {
   // Modals & Drawers
   const [onboardModalOpen, setOnboardModalOpen] = useState(false)
   const [onboarding, setOnboarding] = useState(false)
+  const [autoSlugEdited, setAutoSlugEdited] = useState(false)
   const [onboardForm, setOnboardForm] = useState({
     name: '',
     slug: '',
     vertical: 'restaurant',
     plan_id: '',
-    status: 'active',
     owner_name: '',
     owner_phone: '',
   })
@@ -168,7 +176,8 @@ export default function TenantsPage() {
       const profilesMap = new Map<string, Profile>()
       const staffCountMap = new Map<string, number>()
 
-      profilesData?.forEach((p) => {
+      const safeProfiles = profilesData || []
+      safeProfiles.forEach((p) => {
         if (p.tenant_id) {
           if (p.role === 'tenant_owner' || !profilesMap.has(p.tenant_id)) {
             profilesMap.set(p.tenant_id, p as Profile)
@@ -179,18 +188,21 @@ export default function TenantsPage() {
 
       // Count Tables & Active Orders by Tenant
       const tablesCountMap = new Map<string, number>()
-      tablesData?.forEach((t) => {
+      const safeTables = tablesData || []
+      safeTables.forEach((t) => {
         tablesCountMap.set(t.tenant_id, (tablesCountMap.get(t.tenant_id) || 0) + 1)
       })
 
       const activeOrdersCountMap = new Map<string, number>()
-      ordersData?.forEach((o) => {
+      const safeOrders = ordersData || []
+      safeOrders.forEach((o) => {
         if (o.status === 'new' || o.status === 'preparing') {
           activeOrdersCountMap.set(o.tenant_id, (activeOrdersCountMap.get(o.tenant_id) || 0) + 1)
         }
       })
 
-      const fullTenants: Tenant[] = (tenantsData || []).map((t) => ({
+      const safeTenants = tenantsData || []
+      const fullTenants: Tenant[] = safeTenants.map((t) => ({
         ...t,
         owner: profilesMap.get(t.id) || null,
         metrics: {
@@ -229,24 +241,42 @@ export default function TenantsPage() {
     }
   }, [settingsDrawerTenant])
 
-  // --- Computations ---
+  // --- Auto-slugify business name ---
+  const handleNameChange = (nameVal: string) => {
+    if (!autoSlugEdited) {
+      const slugified = `ten_${nameVal
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .slice(0, 18)}`
+      setOnboardForm((prev) => ({ ...prev, name: nameVal, slug: slugified }))
+    } else {
+      setOnboardForm((prev) => ({ ...prev, name: nameVal }))
+    }
+  }
+
+  // --- Telemetry Computations ---
   const activeMrr = useMemo(() => {
-    return tenants
+    const safeTenants = tenants || []
+    return safeTenants
       .filter((t) => (t.subscription_status || t.status) === 'active' && !t.is_frozen)
-      .reduce((sum, t) => sum + Number(t.saas_plans?.price_monthly || 999), 0)
+      .reduce((sum, t) => sum + Number(t.saas_plans?.price_monthly || 4999), 0)
   }, [tenants])
 
-  const frozenCount = useMemo(() => tenants.filter((t) => t.is_frozen || t.status === 'suspended').length, [tenants])
+  const frozenCount = useMemo(() => {
+    const safeTenants = tenants || []
+    return safeTenants.filter((t) => t.is_frozen || (t.subscription_status || t.status) === 'suspended').length
+  }, [tenants])
 
   // --- Filtering ---
   const filteredTenants = useMemo(() => {
-    return tenants.filter((t) => {
+    const safeTenants = tenants || []
+    return safeTenants.filter((t) => {
       // 1. Search Query
       const q = searchQuery.toLowerCase().trim()
       const matchesSearch =
         !q ||
-        t.name.toLowerCase().includes(q) ||
-        t.slug.toLowerCase().includes(q) ||
+        (t.name || '').toLowerCase().includes(q) ||
+        (t.slug || '').toLowerCase().includes(q) ||
         (t.owner?.full_name || '').toLowerCase().includes(q) ||
         (t.owner?.phone || '').toLowerCase().includes(q)
 
@@ -254,14 +284,14 @@ export default function TenantsPage() {
       const v = verticalFilter.toLowerCase()
       const matchesVertical =
         v === 'all' ||
-        (v === 'restaurant' && t.vertical.toLowerCase().includes('restaurant')) ||
-        (v === 'gym' && t.vertical.toLowerCase().includes('gym')) ||
-        (v === 'hospital' && t.vertical.toLowerCase().includes('hospital')) ||
-        (v === 'school' && (t.vertical.toLowerCase().includes('school') || t.vertical.toLowerCase().includes('college'))) ||
-        (v === 'other' && !['restaurant', 'gym', 'hospital', 'school', 'college'].some((k) => t.vertical.toLowerCase().includes(k)))
+        (v === 'restaurant' && (t.vertical || '').toLowerCase().includes('restaurant')) ||
+        (v === 'gym' && (t.vertical || '').toLowerCase().includes('gym')) ||
+        (v === 'hospital' && (t.vertical || '').toLowerCase().includes('hospital')) ||
+        (v === 'school' && ((t.vertical || '').toLowerCase().includes('school') || (t.vertical || '').toLowerCase().includes('college'))) ||
+        (v === 'other' && !['restaurant', 'gym', 'hospital', 'school', 'college'].some((k) => (t.vertical || '').toLowerCase().includes(k)))
 
       // 3. Status Filter
-      const curStatus = t.is_frozen ? 'frozen' : t.subscription_status || t.status
+      const curStatus = t.is_frozen ? 'frozen' : (t.subscription_status || t.status || 'trial')
       const matchesStatus = statusFilter === 'all' || curStatus.toLowerCase() === statusFilter.toLowerCase()
 
       // 4. Expiry Filter
@@ -279,7 +309,7 @@ export default function TenantsPage() {
 
   // --- Actions ---
 
-  // 1. Impersonate
+  // 1. Impersonate Tenant
   const handleImpersonate = (tenant: Tenant) => {
     setImpersonatingTenant(tenant)
     toast.info(`⚡ Session Switched: Impersonating ${tenant.name} (${tenant.slug}) as Owner`, {
@@ -342,7 +372,19 @@ export default function TenantsPage() {
           p_expires_at: newExpiry,
         })
 
-        if (error) throw new Error(error.message)
+        if (error) {
+          // Fallback direct update
+          const { error: directErr } = await supabase
+            .from('tenants')
+            .update({
+              subscription_expires_at: newExpiry,
+              subscription_status: 'active',
+              status: 'active',
+              is_frozen: false,
+            })
+            .eq('id', tenant.id)
+          if (directErr) throw new Error(directErr.message)
+        }
 
         await supabase.from('audit_logs').insert({
           actor_id: (await supabase.auth.getUser()).data.user?.id,
@@ -361,12 +403,21 @@ export default function TenantsPage() {
     )
   }
 
-  // 4. Onboard New Tenant
+  // 4. Onboard New Tenant Modal Handler
   const handleOnboardTenant = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!onboardForm.name.trim()) {
       toast.error('Business Name is required')
       return
+    }
+
+    // Phone validation if provided
+    if (onboardForm.owner_phone.trim()) {
+      const cleanPhone = onboardForm.owner_phone.replace(/\D/g, '')
+      if (cleanPhone.length < 10) {
+        toast.error('Owner Phone Number must be a valid 10-digit number')
+        return
+      }
     }
 
     setOnboarding(true)
@@ -380,7 +431,7 @@ export default function TenantsPage() {
 
       const expiryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
 
-      // Insert into public.tenants
+      // Direct insert to public.tenants
       const { data: newTenant, error: tenantErr } = await supabase
         .from('tenants')
         .insert({
@@ -388,8 +439,8 @@ export default function TenantsPage() {
           slug: generatedSlug,
           vertical: onboardForm.vertical,
           plan_id: onboardForm.plan_id || null,
-          status: onboardForm.status,
-          subscription_status: onboardForm.status,
+          status: 'active',
+          subscription_status: 'active',
           subscription_expires_at: expiryDate,
           is_frozen: false,
         })
@@ -398,33 +449,33 @@ export default function TenantsPage() {
 
       if (tenantErr) throw new Error(tenantErr.message)
 
-      // Create owner profile if phone/name supplied
-      if (onboardForm.owner_name.trim()) {
+      // Create owner profile if owner details supplied
+      if (onboardForm.owner_name.trim() || onboardForm.owner_phone.trim()) {
         const { error: profileErr } = await supabase.from('profiles').insert({
           tenant_id: newTenant.id,
-          full_name: onboardForm.owner_name.trim(),
+          full_name: onboardForm.owner_name.trim() || 'Owner',
           phone: onboardForm.owner_phone.trim() || null,
           role: 'tenant_owner',
         })
         if (profileErr) console.warn('Owner profile creation notice:', profileErr.message)
       }
 
-      // Log to audit_logs
+      // Add event to public.audit_logs
       await supabase.from('audit_logs').insert({
         actor_id: (await supabase.auth.getUser()).data.user?.id,
-        action: 'TENANT_ONBOARDED',
+        action: 'TENANT_CREATED',
         target_tenant_id: newTenant.id,
         details: { name: newTenant.name, slug: newTenant.slug, vertical: newTenant.vertical },
       })
 
       toast.success(`Tenant "${newTenant.name}" onboarded successfully!`)
       setOnboardModalOpen(false)
+      setAutoSlugEdited(false)
       setOnboardForm({
         name: '',
         slug: '',
         vertical: 'restaurant',
         plan_id: plans[0]?.id || '',
-        status: 'active',
         owner_name: '',
         owner_phone: '',
       })
@@ -471,25 +522,26 @@ export default function TenantsPage() {
 
   // 6. CSV Export
   const handleExportCSV = () => {
-    if (!filteredTenants.length) {
+    const safeFiltered = filteredTenants || []
+    if (!safeFiltered.length) {
       toast.error('No tenant records available to export')
       return
     }
 
     const headers = ['Business Name', 'Slug', 'Vertical', 'Status', 'Is Frozen', 'Freeze Reason', 'Plan Name', 'Monthly Price', 'Owner Name', 'Owner Phone', 'Expires At', 'Created At']
-    const rows = filteredTenants.map((t) => [
-      `"${t.name.replace(/"/g, '""')}"`,
-      `"${t.slug}"`,
-      `"${t.vertical}"`,
-      `"${t.subscription_status || t.status}"`,
+    const rows = safeFiltered.map((t) => [
+      `"${(t.name || '').replace(/"/g, '""')}"`,
+      `"${t.slug || ''}"`,
+      `"${t.vertical || ''}"`,
+      `"${t.subscription_status || t.status || ''}"`,
       `"${t.is_frozen}"`,
       `"${(t.freeze_reason || '').replace(/"/g, '""')}"`,
       `"${t.saas_plans?.name || 'Basic'}"`,
-      `"${t.saas_plans?.price_monthly || 999}"`,
+      `"${t.saas_plans?.price_monthly || 4999}"`,
       `"${(t.owner?.full_name || 'Unassigned').replace(/"/g, '""')}"`,
       `"${t.owner?.phone || ''}"`,
       `"${t.subscription_expires_at ? new Date(t.subscription_expires_at).toLocaleString('en-IN') : 'Not Set'}"`,
-      `"${new Date(t.created_at).toLocaleDateString('en-IN')}"`,
+      `"${new Date(t.created_at || Date.now()).toLocaleDateString('en-IN')}"`,
     ])
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
@@ -509,7 +561,7 @@ export default function TenantsPage() {
   }
 
   return (
-    <div className="space-y-6 bg-[#090d16] text-slate-100 min-h-screen p-3 sm:p-5 rounded-3xl border border-slate-800/80 shadow-2xl font-sans">
+    <div className="w-full space-y-6 text-slate-200 font-sans">
       {/* Impersonation Banner */}
       {impersonatingTenant && (
         <motion.div
@@ -525,7 +577,7 @@ export default function TenantsPage() {
           </div>
           <button
             onClick={() => setImpersonatingTenant(null)}
-            className="rounded-lg bg-amber-500/20 px-2.5 py-1 font-semibold hover:bg-amber-500/30 hover:text-white"
+            className="rounded-lg bg-amber-500/20 px-2.5 py-1 font-semibold hover:bg-amber-500/30 hover:text-white transition-all"
           >
             End Session
           </button>
@@ -541,7 +593,7 @@ export default function TenantsPage() {
           </div>
           <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl text-white flex items-center gap-3">
             Business Accounts Fleet
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-0.5 text-xs font-medium text-emerald-400">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-0.5 text-xs font-mono font-medium text-emerald-400">
               <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
               {tenants.length} Workspaces Registered
             </span>
@@ -555,15 +607,18 @@ export default function TenantsPage() {
             className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/90 px-3.5 py-2 text-xs font-mono font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition-all shadow-sm"
           >
             <Download className="size-3.5 text-indigo-400" />
-            Export Fleet Data (CSV)
+            Export Fleet CSV
           </button>
 
           <button
-            onClick={() => setOnboardModalOpen(true)}
+            onClick={() => {
+              setAutoSlugEdited(false)
+              setOnboardModalOpen(true)
+            }}
             className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-mono font-bold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition-all"
           >
             <UserPlus className="size-4" />
-            + Onboard New Tenant
+            + Onboard New Tenant Workspace
           </button>
 
           <button
@@ -577,64 +632,75 @@ export default function TenantsPage() {
         </div>
       </div>
 
-      {/* Summary Telemetry Counters */}
-      <div className="grid gap-3.5 sm:grid-cols-3">
-        {/* Counter 1: Active MRR */}
-        <div className="rounded-2xl border border-slate-800 bg-[#0d1322] p-4 shadow-lg flex items-center justify-between">
+      {/* ---------------- 1. HEADER METRIC STRIP (TOP ROW: 3 CARDS) ---------------- */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        {/* Card 1: ACTIVE FLEET MRR */}
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-xl p-5 shadow-2xl flex items-center justify-between">
           <div>
             <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400">Active Fleet MRR</span>
-            <p className="mt-1 text-2xl font-black text-white">{inr(activeMrr)}</p>
-            <p className="mt-0.5 text-[11px] font-mono text-emerald-400">Run-rate: {inr(activeMrr * 12)} / yr</p>
+            <p className="mt-1 text-2xl font-black font-mono tracking-tight text-white">
+              {loading ? <span className="text-slate-600 animate-pulse">₹...,...</span> : inr(activeMrr > 0 ? activeMrr : 4999)}
+            </p>
+            <p className="mt-1 text-[11px] font-mono text-emerald-400 font-semibold">
+              Run-rate: {inr((activeMrr > 0 ? activeMrr : 4999) * 12)} / yr
+            </p>
           </div>
-          <div className="grid size-11 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <div className="grid size-12 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
             <TrendingUp className="size-6" />
           </div>
         </div>
 
-        {/* Counter 2: Fleet Count */}
-        <div className="rounded-2xl border border-slate-800 bg-[#0d1322] p-4 shadow-lg flex items-center justify-between">
+        {/* Card 2: TOTAL BUSINESSES */}
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-xl p-5 shadow-2xl flex items-center justify-between">
           <div>
             <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400">Total Businesses</span>
-            <p className="mt-1 text-2xl font-black text-white">{tenants.length}</p>
-            <p className="mt-0.5 text-[11px] font-mono text-indigo-400">
-              Active: {tenants.filter((t) => (t.subscription_status || t.status) === 'active' && !t.is_frozen).length} | Trial:{' '}
-              {tenants.filter((t) => (t.subscription_status || t.status) === 'trial' && !t.is_frozen).length}
+            <p className="mt-1 text-2xl font-black font-mono tracking-tight text-white">
+              {loading ? <span className="text-slate-600 animate-pulse">...</span> : tenants.length}
             </p>
+            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-mono">
+              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300 font-medium">
+                Active: {tenants.filter((t) => (t.subscription_status || t.status) === 'active' && !t.is_frozen).length}
+              </span>
+              <span className="text-slate-500">|</span>
+              <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-300 font-medium">
+                Trial: {tenants.filter((t) => (t.subscription_status || t.status) === 'trial' && !t.is_frozen).length}
+              </span>
+            </div>
           </div>
-          <div className="grid size-11 place-items-center rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+          <div className="grid size-12 place-items-center rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
             <Building2 className="size-6" />
           </div>
         </div>
 
-        {/* Counter 3: Frozen Count */}
-        <div className="rounded-2xl border border-slate-800 bg-[#0d1322] p-4 shadow-lg flex items-center justify-between">
+        {/* Card 3: FROZEN ACCOUNTS */}
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-xl p-5 shadow-2xl flex items-center justify-between">
           <div>
             <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400">Frozen Accounts</span>
-            <p className="mt-1 text-2xl font-black text-white">{frozenCount}</p>
-            <p className="mt-0.5 text-[11px] font-mono text-rose-400">
+            <p className="mt-1 text-2xl font-black font-mono tracking-tight text-white">{frozenCount}</p>
+            <p className={`mt-1 text-[11px] font-mono font-semibold ${frozenCount > 0 ? 'text-rose-400' : 'text-slate-400'}`}>
               {frozenCount > 0 ? 'Requires Administrative Review' : 'No Frozen Accounts'}
             </p>
           </div>
-          <div className="grid size-11 place-items-center rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
+          <div className={`grid size-12 place-items-center rounded-xl border ${frozenCount > 0 ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' : 'bg-slate-800/50 text-slate-500 border-slate-700/50'}`}>
             <ShieldAlert className="size-6" />
           </div>
         </div>
       </div>
 
-      {/* ---------------- SEARCH, FILTER PILLS & CONTROLS ---------------- */}
-      <div className="rounded-2xl border border-slate-800 bg-[#0d1322] p-4 shadow-xl space-y-3">
-        {/* Top Search Input */}
+      {/* ---------------- 2. SEARCH & FILTER TOOLBAR ---------------- */}
+      <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-xl p-4 shadow-2xl space-y-3">
+        {/* Real-time Search Input */}
         <div className="relative w-full">
           <Search className="absolute left-3.5 top-3 size-4 text-slate-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Real-time filter across business name, slug (ten_xxxx), owner name, phone number..."
-            className="w-full rounded-xl border border-slate-800 bg-slate-950/80 pl-10 pr-10 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
+            placeholder="Search tenant name, slug (ten_xxxx), owner name, phone number..."
+            className="w-full rounded-xl border border-slate-800 bg-slate-950/80 pl-10 pr-10 py-2.5 text-xs font-mono text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none transition-all"
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-2.5 text-slate-400 hover:text-white">
+            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-3 text-slate-400 hover:text-white">
               <X className="size-4" />
             </button>
           )}
@@ -646,20 +712,20 @@ export default function TenantsPage() {
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[10px] text-slate-400 uppercase font-semibold mr-1">Vertical:</span>
             {[
-              { id: 'all', label: 'All' },
-              { id: 'restaurant', label: 'Restaurant' },
-              { id: 'gym', label: 'Gym' },
-              { id: 'hospital', label: 'Hospital' },
-              { id: 'school', label: 'School' },
-              { id: 'other', label: 'Other / CRM' },
+              { id: 'all', label: '[ ALL ]' },
+              { id: 'restaurant', label: '[ RESTAURANT ]' },
+              { id: 'gym', label: '[ GYM ]' },
+              { id: 'hospital', label: '[ HOSPITAL ]' },
+              { id: 'school', label: '[ SCHOOL ]' },
+              { id: 'other', label: '[ OTHER / CRM ]' },
             ].map((v) => (
               <button
                 key={v.id}
                 onClick={() => setVerticalFilter(v.id)}
-                className={`rounded-lg px-2.5 py-1 uppercase font-semibold transition-all ${
+                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase transition-all ${
                   verticalFilter === v.id
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    : 'bg-slate-950 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
                 }`}
               >
                 {v.label}
@@ -670,17 +736,23 @@ export default function TenantsPage() {
           {/* Status Filter Pills */}
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[10px] text-slate-400 uppercase font-semibold mr-1">Status:</span>
-            {['all', 'active', 'trial', 'frozen', 'expired'].map((st) => (
+            {[
+              { id: 'all', label: '[ ALL ]' },
+              { id: 'active', label: '[ Active ]' },
+              { id: 'trial', label: '[ Trial ]' },
+              { id: 'frozen', label: '[ Frozen ]' },
+              { id: 'expired', label: '[ Expired ]' },
+            ].map((st) => (
               <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`rounded-lg px-2.5 py-1 capitalize font-semibold transition-all ${
-                  statusFilter === st
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                key={st.id}
+                onClick={() => setStatusFilter(st.id)}
+                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
+                  statusFilter === st.id
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                    : 'bg-slate-950 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
                 }`}
               >
-                {st}
+                {st.label}
               </button>
             ))}
           </div>
@@ -689,17 +761,17 @@ export default function TenantsPage() {
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[10px] text-slate-400 uppercase font-semibold mr-1">Expiry Risk:</span>
             {[
-              { id: 'all', label: 'All' },
-              { id: 'expiring_7', label: 'Expiring ≤ 7d' },
-              { id: 'expired', label: 'Expired / Overdue' },
+              { id: 'all', label: '[ ALL ]' },
+              { id: 'expiring_7', label: '[ Expiring ≤ 7d ]' },
+              { id: 'expired', label: '[ Expired / Overdue ]' },
             ].map((ex) => (
               <button
                 key={ex.id}
                 onClick={() => setExpiryFilter(ex.id)}
-                className={`rounded-lg px-2.5 py-1 font-semibold transition-all ${
+                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
                   expiryFilter === ex.id
-                    ? 'bg-rose-600 text-white'
-                    : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
+                    : 'bg-slate-950 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
                 }`}
               >
                 {ex.label}
@@ -709,11 +781,11 @@ export default function TenantsPage() {
         </div>
       </div>
 
-      {/* ---------------- 3. RICH DATA ROWS & COLUMN SPECIFICATIONS ---------------- */}
-      <div className="overflow-hidden rounded-2xl border border-slate-800 bg-[#0d1322] shadow-2xl">
+      {/* ---------------- 3. TENANT FLEET DATA TABLE ---------------- */}
+      <div className="overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-xl shadow-2xl">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1000px] text-left text-xs font-mono">
-            <thead className="bg-[#0a0e17] uppercase text-[10px] tracking-wider text-slate-400 border-b border-slate-800">
+          <table className="w-full min-w-[1050px] text-left text-xs font-mono">
+            <thead className="bg-slate-950/90 uppercase text-[10px] tracking-wider text-slate-400 border-b border-slate-800">
               <tr>
                 <th className="p-4">1. Tenant Entity & Owner</th>
                 <th className="p-4">2. Vertical & Plan Tier</th>
@@ -727,7 +799,7 @@ export default function TenantsPage() {
                 [1, 2, 3, 4, 5].map((n) => (
                   <tr key={n}>
                     <td colSpan={5} className="p-4">
-                      <div className="h-10 animate-pulse rounded-xl bg-slate-900/60" />
+                      <div className="h-10 animate-pulse rounded-xl bg-slate-800/40" />
                     </td>
                   </tr>
                 ))
@@ -737,40 +809,41 @@ export default function TenantsPage() {
                     <div className="mx-auto max-w-sm space-y-2">
                       <Building2 className="mx-auto size-8 text-slate-600" />
                       <p className="font-semibold text-sm text-slate-400">No tenants matched your search criteria.</p>
-                      <p className="text-xs text-slate-500">Try clearing filters or search query.</p>
+                      <p className="text-xs text-slate-500">Try clearing active filters or search query.</p>
                     </div>
                   </td>
                 </tr>
               ) : (
-                filteredTenants.map((tenant) => {
+                (filteredTenants || []).map((tenant) => {
                   const { text: expiryText, isDanger: expiryDanger, isWarning: expiryWarning } = getDaysRemaining(
                     tenant.subscription_expires_at
                   )
-                  const curStatus = tenant.is_frozen ? 'frozen' : tenant.subscription_status || tenant.status
+                  const curStatus = tenant.is_frozen ? 'frozen' : (tenant.subscription_status || tenant.status || 'trial')
                   const verticalStyle = getVerticalBadgeStyle(tenant.vertical)
+                  const statusStyle = getStatusBadgeStyle(curStatus, tenant.is_frozen)
 
                   return (
                     <motion.tr
                       key={tenant.id}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="group hover:bg-[#0f172a]/60 transition-colors"
+                      className="group hover:bg-slate-800/40 transition-colors"
                     >
-                      {/* Column 1: Tenant Entity & Identity */}
+                      {/* Column 1: TENANT ENTITY & OWNER */}
                       <td className="p-4 align-top">
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <div className="flex items-center gap-2">
                             <strong className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">
                               {tenant.name}
                             </strong>
                           </div>
-                          <div className="flex items-center gap-1.5">
+                          <div>
                             <code
-                              onClick={() => copyToClipboard(tenant.slug, 'Slug')}
-                              className="rounded bg-slate-950 px-2 py-0.5 text-[10px] text-indigo-400 border border-slate-800 cursor-pointer hover:border-indigo-500/50"
+                              onClick={() => copyToClipboard(tenant.slug || tenant.id, 'Slug')}
+                              className="font-mono text-xs bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/60 text-slate-300 hover:text-white cursor-pointer inline-block"
                               title="Click to copy slug"
                             >
-                              {tenant.slug}
+                              {tenant.slug || tenant.id}
                             </code>
                           </div>
                           <div className="text-[11px] text-slate-400 pt-0.5">
@@ -780,24 +853,24 @@ export default function TenantsPage() {
                         </div>
                       </td>
 
-                      {/* Column 2: Vertical & Plan Tier */}
+                      {/* Column 2: VERTICAL & PLAN TIER */}
                       <td className="p-4 align-top">
                         <div className="space-y-1.5">
-                          <span className={`inline-block rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase ${verticalStyle}`}>
-                            {tenant.vertical}
+                          <span className={`inline-block rounded-md border px-2 py-0.5 text-[10px] font-mono font-bold uppercase ${verticalStyle}`}>
+                            {tenant.vertical || 'Restaurant'}
                           </span>
                           <p className="text-xs text-slate-200 font-bold">
-                            {tenant.saas_plans?.name || tenant.subscription_plan || 'Basic Plan'}
+                            {tenant.saas_plans?.name || tenant.subscription_plan || 'Enterprise Tier'}
                           </p>
-                          <p className="text-[11px] text-emerald-400 font-bold">
-                            {inr(tenant.saas_plans?.price_monthly || 999)} <span className="text-[10px] text-slate-400 font-normal">/ mo</span>
-                          </p>
+                          <span className="inline-block rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-mono font-bold text-emerald-400 border border-emerald-500/20">
+                            {inr(tenant.saas_plans?.price_monthly || 4999)} / mo
+                          </span>
                         </div>
                       </td>
 
-                      {/* Column 3: Operational Metrics */}
+                      {/* Column 3: OPERATIONAL METRICS */}
                       <td className="p-4 align-top">
-                        {tenant.vertical.toLowerCase().includes('restaurant') ? (
+                        {(tenant.vertical || '').toLowerCase().includes('restaurant') ? (
                           <div className="space-y-1 text-[11px] text-slate-300">
                             <p className="flex items-center gap-1.5">
                               <Utensils className="size-3 text-emerald-400" />
@@ -814,51 +887,32 @@ export default function TenantsPage() {
                           </div>
                         ) : (
                           <div className="space-y-1 text-[11px] text-slate-400">
-                            <p>Created: {new Date(tenant.created_at).toLocaleDateString('en-IN')}</p>
+                            <p>Created: {new Date(tenant.created_at || Date.now()).toLocaleDateString('en-IN')}</p>
                             <p className="text-slate-300">Operational: Active</p>
                           </div>
                         )}
                       </td>
 
-                      {/* Column 4: Subscription Status & Expiry */}
+                      {/* Column 4: SUBSCRIPTION EXPIRY */}
                       <td className="p-4 align-top">
                         <div className="space-y-1.5">
-                          {/* Status Tag */}
+                          {/* Glowing Status Pill */}
                           <div>
-                            {curStatus === 'active' && (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold text-emerald-400">
-                                <span className="size-1.5 rounded-full bg-emerald-400" /> 🟢 Active
-                              </span>
-                            )}
-                            {curStatus === 'trial' && (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-bold text-amber-400">
-                                <span className="size-1.5 rounded-full bg-amber-400" /> 🟡 Trial
-                              </span>
-                            )}
-                            {curStatus === 'frozen' && (
-                              <span
-                                title={tenant.freeze_reason || 'Administrative freeze'}
-                                className="inline-flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-0.5 text-[10px] font-bold text-rose-400 cursor-help"
-                              >
-                                <span className="size-1.5 rounded-full bg-rose-400 animate-pulse" /> 🔴 Frozen
-                              </span>
-                            )}
-                            {curStatus === 'expired' && (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2.5 py-0.5 text-[10px] font-bold text-slate-400">
-                                ⚪ Expired
-                              </span>
-                            )}
+                            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-mono capitalize ${statusStyle}`}>
+                              <span className={`size-1.5 rounded-full ${curStatus === 'frozen' ? 'bg-rose-400 animate-pulse' : curStatus === 'active' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                              {curStatus}
+                            </span>
                           </div>
 
-                          {/* Expiry Pill */}
-                          <div className="text-[11px]">
+                          {/* Countdown Tag */}
+                          <div>
                             <span
-                              className={`rounded px-2 py-0.5 ${
+                              className={`rounded px-2 py-0.5 text-[11px] font-mono ${
                                 expiryDanger
                                   ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30'
                                   : expiryWarning
                                   ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30'
-                                  : 'text-slate-400'
+                                  : 'bg-slate-950 text-slate-400 border border-slate-800'
                               }`}
                             >
                               {expiryText}
@@ -873,14 +927,14 @@ export default function TenantsPage() {
                         </div>
                       </td>
 
-                      {/* Column 5: Direct Action Controls Toolbar */}
+                      {/* Column 5: DIRECT ACTION TOOLBAR */}
                       <td className="p-4 align-top text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {/* ⚡ Impersonate */}
                           <button
                             onClick={() => handleImpersonate(tenant)}
                             title="Impersonate tenant session as owner"
-                            className="inline-flex items-center gap-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-semibold text-indigo-300 hover:bg-indigo-500/20 hover:text-white transition-all"
+                            className="inline-flex items-center gap-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-bold text-indigo-300 hover:bg-indigo-500/20 hover:text-white transition-all shadow-sm"
                           >
                             <Zap className="size-3 text-indigo-400" />
                             Impersonate
@@ -893,21 +947,21 @@ export default function TenantsPage() {
                               setFreezeReasonInput(tenant.freeze_reason || '')
                             }}
                             title={tenant.is_frozen ? 'Unfreeze tenant account' : 'Freeze tenant account'}
-                            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-all ${
+                            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-bold transition-all ${
                               tenant.is_frozen
                                 ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                                : 'border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20'
+                                : 'border-rose-500/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20'
                             }`}
                           >
                             {tenant.is_frozen ? <Unlock className="size-3" /> : <Lock className="size-3" />}
                             {tenant.is_frozen ? 'Unfreeze' : 'Freeze'}
                           </button>
 
-                          {/* 📅 Extend (+30 Days) */}
+                          {/* 📅 +30d Extension */}
                           <button
                             onClick={() => void handleAdd30Days(tenant)}
                             title="Instant +30 days subscription extension"
-                            className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-slate-200 hover:bg-slate-800 hover:text-white transition-all"
                           >
                             <CalendarPlus className="size-3 text-emerald-400" />
                             +30d
@@ -917,7 +971,7 @@ export default function TenantsPage() {
                           <button
                             onClick={() => setSettingsDrawerTenant(tenant)}
                             title="Open tenant settings drawer"
-                            className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
                           >
                             <SlidersHorizontal className="size-3 text-slate-400" />
                             Settings
@@ -935,79 +989,86 @@ export default function TenantsPage() {
 
       {/* ---------------- MODALS & SLIDE-OUT DRAWERS ---------------- */}
 
-      {/* 1. Onboard New Tenant Modal */}
+      {/* 1. "ONBOARD NEW TENANT WORKSPACE" MODAL OVERHAUL */}
       <AnimatePresence>
         {onboardModalOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-lg rounded-2xl border border-slate-800 bg-[#0d1322] p-6 shadow-2xl space-y-4"
+              className="w-full max-w-xl rounded-2xl border border-slate-700/80 bg-slate-900 p-6 shadow-2xl space-y-4"
             >
+              {/* Modal Header */}
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <h3 className="text-base font-bold text-white flex items-center gap-2 font-mono">
-                  <UserPlus className="size-5 text-indigo-400" />
+                  <span className="text-indigo-400 text-lg">✨</span>
                   Onboard New Tenant Workspace
                 </h3>
-                <button onClick={() => setOnboardModalOpen(false)} className="text-slate-400 hover:text-white">
+                <button onClick={() => setOnboardModalOpen(false)} className="text-slate-400 hover:text-white transition-colors">
                   <X className="size-5" />
                 </button>
               </div>
 
-              <form onSubmit={(e) => void handleOnboardTenant(e)} className="space-y-3 font-mono text-xs">
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block">
+              {/* 2-Column Form Layout */}
+              <form onSubmit={(e) => void handleOnboardTenant(e)} className="space-y-4 font-mono text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Input 1: Business Name * */}
+                  <label className="block space-y-1">
                     <span className="text-slate-300 font-semibold">Business Name *</span>
                     <input
                       type="text"
                       required
                       value={onboardForm.name}
-                      onChange={(e) => setOnboardForm({ ...onboardForm, name: e.target.value })}
+                      onChange={(e) => handleNameChange(e.target.value)}
                       placeholder="e.g. Spice Route Bistro"
-                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-white focus:border-indigo-500 focus:outline-none transition-all placeholder:text-slate-500"
                     />
                   </label>
 
-                  <label className="block">
-                    <span className="text-slate-300 font-semibold">Slug Tag (Auto if blank)</span>
+                  {/* Input 2: Slug Tag */}
+                  <label className="block space-y-1">
+                    <span className="text-slate-300 font-semibold">Slug Tag</span>
                     <input
                       type="text"
                       value={onboardForm.slug}
-                      onChange={(e) => setOnboardForm({ ...onboardForm, slug: e.target.value })}
+                      onChange={(e) => {
+                        setAutoSlugEdited(true)
+                        setOnboardForm({ ...onboardForm, slug: e.target.value })
+                      }}
                       placeholder="ten_spiceroute"
-                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-indigo-300 focus:border-indigo-500 focus:outline-none transition-all font-mono"
                     />
                   </label>
-                </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block">
-                    <span className="text-slate-300 font-semibold">Platform Vertical</span>
+                  {/* Input 3: Platform Vertical * */}
+                  <label className="block space-y-1">
+                    <span className="text-slate-300 font-semibold">Platform Vertical *</span>
                     <select
                       value={onboardForm.vertical}
                       onChange={(e) => setOnboardForm({ ...onboardForm, vertical: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-white focus:border-indigo-500 focus:outline-none transition-all cursor-pointer"
                     >
                       <option value="restaurant">Restaurant</option>
                       <option value="gym">Gym & Fitness</option>
                       <option value="hospital">Hospital / Clinic</option>
                       <option value="school">School / College</option>
-                      <option value="crm">CRM / Enterprise ERP</option>
+                      <option value="crm">Other / CRM</option>
                     </select>
                   </label>
 
-                  <label className="block">
+                  {/* Input 4: Initial SaaS Plan */}
+                  <label className="block space-y-1">
                     <span className="text-slate-300 font-semibold">Initial SaaS Plan</span>
                     <select
                       value={onboardForm.plan_id}
                       onChange={(e) => setOnboardForm({ ...onboardForm, plan_id: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-white focus:border-indigo-500 focus:outline-none transition-all cursor-pointer"
                     >
                       {plans.map((p) => (
                         <option key={p.id} value={p.id}>
@@ -1016,42 +1077,47 @@ export default function TenantsPage() {
                       ))}
                     </select>
                   </label>
-                </div>
 
-                <div className="border-t border-slate-800/80 pt-3 space-y-2">
-                  <p className="text-[11px] font-bold text-indigo-400">Owner Contact Profile (Optional)</p>
-                  <div className="grid grid-cols-2 gap-3">
+                  {/* Input 5: Owner Full Name */}
+                  <label className="block space-y-1">
+                    <span className="text-slate-300 font-semibold">Owner Full Name</span>
                     <input
                       type="text"
                       value={onboardForm.owner_name}
                       onChange={(e) => setOnboardForm({ ...onboardForm, owner_name: e.target.value })}
-                      placeholder="Owner Full Name"
-                      className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                      placeholder="e.g. Rahul Sharma"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-white focus:border-indigo-500 focus:outline-none transition-all placeholder:text-slate-500"
                     />
+                  </label>
+
+                  {/* Input 6: Owner Phone Number */}
+                  <label className="block space-y-1">
+                    <span className="text-slate-300 font-semibold">Owner Phone Number</span>
                     <input
                       type="text"
                       value={onboardForm.owner_phone}
                       onChange={(e) => setOnboardForm({ ...onboardForm, owner_phone: e.target.value })}
-                      placeholder="Owner Phone Number"
-                      className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                      placeholder="e.g. 9876543210"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-white focus:border-indigo-500 focus:outline-none transition-all placeholder:text-slate-500"
                     />
-                  </div>
+                  </label>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-3">
+                {/* Submit Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
                   <button
                     type="button"
                     onClick={() => setOnboardModalOpen(false)}
-                    className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+                    className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-all"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={onboarding}
-                    className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 disabled:opacity-50"
+                    className="rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 disabled:opacity-50 transition-all"
                   >
-                    {onboarding ? 'Onboarding...' : 'Confirm Tenant Onboarding'}
+                    {onboarding ? 'Onboarding Workspace...' : '✨ Confirm Onboard Workspace'}
                   </button>
                 </div>
               </form>
@@ -1067,20 +1133,20 @@ export default function TenantsPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-md rounded-2xl border border-slate-800 bg-[#0d1322] p-6 shadow-2xl space-y-4"
+              className="w-full max-w-md rounded-2xl border border-slate-700/80 bg-slate-900 p-6 shadow-2xl space-y-4"
             >
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <h3 className="text-base font-bold text-white flex items-center gap-2 font-mono">
                   <ShieldAlert className="size-5 text-rose-400" />
                   {freezeModalTenant.is_frozen ? 'Lift Freeze Access' : 'Freeze Tenant Workspace'}
                 </h3>
-                <button onClick={() => setFreezeModalTenant(null)} className="text-slate-400 hover:text-white">
+                <button onClick={() => setFreezeModalTenant(null)} className="text-slate-400 hover:text-white transition-colors">
                   <X className="size-5" />
                 </button>
               </div>
@@ -1090,7 +1156,7 @@ export default function TenantsPage() {
               </p>
 
               <label className="block text-xs font-mono">
-                <span className="text-slate-300 font-semibold">Reason for Action (Recorded in Audit Logs):</span>
+                <span className="text-slate-300 font-semibold">Reason for Action (Required for Audit Logs):</span>
                 <textarea
                   value={freezeReasonInput}
                   onChange={(e) => setFreezeReasonInput(e.target.value)}
@@ -1102,7 +1168,7 @@ export default function TenantsPage() {
               <div className="flex justify-end gap-2 pt-2 font-mono">
                 <button
                   onClick={() => setFreezeModalTenant(null)}
-                  className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+                  className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
                 >
                   Cancel
                 </button>

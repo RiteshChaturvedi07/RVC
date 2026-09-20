@@ -451,7 +451,7 @@ export function PaymentVerification() {
   }
 
   return (
-    <div className="space-y-6 bg-[#090d16] text-slate-100 min-h-screen p-3 sm:p-5 rounded-3xl border border-slate-800/80 shadow-2xl font-sans">
+    <div className="w-full space-y-6 text-slate-200 font-sans">
       {/* Header Controls */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-800/80 pb-5">
         <div>

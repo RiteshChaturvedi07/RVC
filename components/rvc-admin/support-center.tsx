@@ -462,7 +462,7 @@ export function SupportCenter() {
   }
 
   return (
-    <div className="space-y-4 bg-[#090d16] text-slate-100 min-h-screen p-3 sm:p-5 rounded-3xl border border-slate-800/80 shadow-2xl font-sans">
+    <div className="w-full space-y-4 text-slate-200 font-sans">
       {/* Impersonation Banner */}
       {impersonatingTenant && (
         <motion.div

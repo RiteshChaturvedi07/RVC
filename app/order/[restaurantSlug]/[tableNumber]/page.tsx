@@ -241,10 +241,8 @@ export default function OrderPage() {
   // Call Waiter Button Action
   const handleCallWaiter = async () => {
     setRequesting(true)
-    const { error } = await db.rpc('public_request_restaurant_bill', {
+    const { error } = await db.rpc('public_call_restaurant_waiter', {
       p_table_token: menu.table.token,
-      p_payment_mode: 'waiter_call',
-      p_payment_reference: 'Waiter Assistance Needed at Table',
     })
     setRequesting(false)
     if (error) setToastMessage(error.message)
@@ -436,33 +434,29 @@ export default function OrderPage() {
         <div className="flex rounded-2xl border border-border bg-card p-1 shadow-2xs text-xs font-bold dark:bg-slate-900">
           <button
             onClick={() => setDietaryFilter('all')}
-            className={`flex-1 py-1.5 rounded-xl transition-all ${
-              dietaryFilter === 'all' ? 'bg-primary text-primary-foreground shadow-2xs' : 'text-muted-foreground'
-            }`}
+            className={`flex-1 py-1.5 rounded-xl transition-all ${dietaryFilter === 'all' ? 'bg-primary text-primary-foreground shadow-2xs' : 'text-muted-foreground'
+              }`}
           >
             All Dishes
           </button>
           <button
             onClick={() => setDietaryFilter('veg')}
-            className={`flex-1 py-1.5 rounded-xl transition-all ${
-              dietaryFilter === 'veg' ? 'bg-emerald-600 text-white shadow-2xs' : 'text-muted-foreground'
-            }`}
+            className={`flex-1 py-1.5 rounded-xl transition-all ${dietaryFilter === 'veg' ? 'bg-emerald-600 text-white shadow-2xs' : 'text-muted-foreground'
+              }`}
           >
             🟢 Pure Veg
           </button>
           <button
             onClick={() => setDietaryFilter('non_veg')}
-            className={`flex-1 py-1.5 rounded-xl transition-all ${
-              dietaryFilter === 'non_veg' ? 'bg-red-600 text-white shadow-2xs' : 'text-muted-foreground'
-            }`}
+            className={`flex-1 py-1.5 rounded-xl transition-all ${dietaryFilter === 'non_veg' ? 'bg-red-600 text-white shadow-2xs' : 'text-muted-foreground'
+              }`}
           >
             🔴 Non-Veg
           </button>
           <button
             onClick={() => setDietaryFilter('egg')}
-            className={`flex-1 py-1.5 rounded-xl transition-all ${
-              dietaryFilter === 'egg' ? 'bg-amber-500 text-slate-950 shadow-2xs' : 'text-muted-foreground'
-            }`}
+            className={`flex-1 py-1.5 rounded-xl transition-all ${dietaryFilter === 'egg' ? 'bg-amber-500 text-slate-950 shadow-2xs' : 'text-muted-foreground'
+              }`}
           >
             🟡 Egg
           </button>
@@ -472,33 +466,30 @@ export default function OrderPage() {
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none text-xs">
           <button
             onClick={() => setBadgeFilter(badgeFilter === 'popular' ? 'all' : 'popular')}
-            className={`whitespace-nowrap rounded-full px-3 py-1 font-extrabold transition-all flex items-center gap-1 ${
-              badgeFilter === 'popular'
+            className={`whitespace-nowrap rounded-full px-3 py-1 font-extrabold transition-all flex items-center gap-1 ${badgeFilter === 'popular'
                 ? 'bg-amber-500 text-slate-950'
                 : 'bg-card border border-border text-foreground hover:bg-secondary'
-            }`}
+              }`}
           >
             <Flame className="size-3 text-orange-500" /> Bestsellers
           </button>
 
           <button
             onClick={() => setBadgeFilter(badgeFilter === 'under100' ? 'all' : 'under100')}
-            className={`whitespace-nowrap rounded-full px-3 py-1 font-extrabold transition-all flex items-center gap-1 ${
-              badgeFilter === 'under100'
+            className={`whitespace-nowrap rounded-full px-3 py-1 font-extrabold transition-all flex items-center gap-1 ${badgeFilter === 'under100'
                 ? 'bg-emerald-600 text-white'
                 : 'bg-card border border-border text-foreground hover:bg-secondary'
-            }`}
+              }`}
           >
             <Zap className="size-3 text-emerald-400" /> Under ₹100
           </button>
 
           <button
             onClick={() => setBadgeFilter(badgeFilter === 'special' ? 'all' : 'special')}
-            className={`whitespace-nowrap rounded-full px-3 py-1 font-extrabold transition-all flex items-center gap-1 ${
-              badgeFilter === 'special'
+            className={`whitespace-nowrap rounded-full px-3 py-1 font-extrabold transition-all flex items-center gap-1 ${badgeFilter === 'special'
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-card border border-border text-foreground hover:bg-secondary'
-            }`}
+              }`}
           >
             <Star className="size-3 text-amber-400" /> Chef's Special
           </button>
@@ -510,9 +501,8 @@ export default function OrderPage() {
             <button
               key={cat}
               onClick={() => setCategory(cat)}
-              className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-all ${
-                category === cat ? 'bg-slate-900 text-white shadow-2xs dark:bg-slate-800' : 'bg-card border border-border text-foreground'
-              }`}
+              className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-all ${category === cat ? 'bg-slate-900 text-white shadow-2xs dark:bg-slate-800' : 'bg-card border border-border text-foreground'
+                }`}
             >
               {cat}
             </button>
@@ -735,11 +725,10 @@ function CheckoutModal(props: any) {
           <button
             type="button"
             onClick={() => props.setDining('dine_in')}
-            className={`rounded-2xl p-3 text-xs font-bold transition-all ${
-              props.dining === 'dine_in'
+            className={`rounded-2xl p-3 text-xs font-bold transition-all ${props.dining === 'dine_in'
                 ? 'bg-primary text-primary-foreground shadow-2xs'
                 : 'border border-border bg-background text-foreground'
-            }`}
+              }`}
           >
             🍽️ Dine-In
           </button>
@@ -747,11 +736,10 @@ function CheckoutModal(props: any) {
           <button
             type="button"
             onClick={() => props.setDining('takeaway')}
-            className={`rounded-2xl p-3 text-xs font-bold transition-all ${
-              props.dining === 'takeaway'
+            className={`rounded-2xl p-3 text-xs font-bold transition-all ${props.dining === 'takeaway'
                 ? 'bg-primary text-primary-foreground shadow-2xs'
                 : 'border border-border bg-background text-foreground'
-            }`}
+              }`}
           >
             🛍️ Takeaway
           </button>
@@ -975,38 +963,46 @@ function SessionHistoryModal({ orders, menu, close }: { orders: Order[]; menu: M
         </div>
         <h2 className="text-xl font-extrabold mt-1">Table {menu.table.number} History</h2>
 
-        <div className="mt-4 space-y-3">
-          {orders.map((order) => (
-            <article key={order.id} className="rounded-2xl border border-border bg-background p-4 space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <b className="font-extrabold text-sm text-foreground">Order #{order.order_number}</b>
-                {getStageBadge(order.status)}
-              </div>
-
-              {order.bill_requested && (
-                <div className="rounded-xl border border-amber-400 bg-amber-500/10 p-2 text-[11px] font-bold text-amber-900 dark:text-amber-200">
-                  ⚠️ Bill requested ({order.requested_payment_mode?.toUpperCase() || 'CASH'})
+        {orders.length === 0 ? (
+          <div className="mt-8 flex flex-col items-center justify-center p-8 text-center rounded-2xl border border-dashed border-border bg-muted/20 space-y-2">
+            <Receipt className="size-8 text-muted-foreground" />
+            <p className="font-extrabold text-sm text-foreground">No Active Orders</p>
+            <p className="text-xs text-muted-foreground">Orders placed during your current dining session will appear here.</p>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {orders.map((order) => (
+              <article key={order.id} className="rounded-2xl border border-border bg-background p-4 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <b className="font-extrabold text-sm text-foreground">Order #{order.order_number}</b>
+                  {getStageBadge(order.status)}
                 </div>
-              )}
 
-              <div className="space-y-1 text-muted-foreground border-t border-border/60 pt-2">
-                {(order.items || []).map((item, idx) => (
-                  <div key={idx} className="flex justify-between">
-                    <span>
-                      {item.name} × {item.quantity}
-                    </span>
-                    {item.line_total && <span>{money(item.line_total)}</span>}
+                {order.bill_requested && (
+                  <div className="rounded-xl border border-amber-400 bg-amber-500/10 p-2 text-[11px] font-bold text-amber-900 dark:text-amber-200">
+                    ⚠️ Bill requested ({order.requested_payment_mode?.toUpperCase() || 'CASH'})
                   </div>
-                ))}
-              </div>
+                )}
 
-              <div className="flex justify-between border-t border-border/60 pt-2 font-extrabold text-foreground text-sm">
-                <span>Order Total:</span>
-                <span>{money(order.total)}</span>
-              </div>
-            </article>
-          ))}
-        </div>
+                <div className="space-y-1 text-muted-foreground border-t border-border/60 pt-2">
+                  {(order.items || []).map((item, idx) => (
+                    <div key={idx} className="flex justify-between">
+                      <span>
+                        {item.name} × {item.quantity}
+                      </span>
+                      {item.line_total && <span>{money(item.line_total)}</span>}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-between border-t border-border/60 pt-2 font-extrabold text-foreground text-sm">
+                  <span>Order Total:</span>
+                  <span>{money(order.total)}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
 
         <div className="mt-6 border-t border-border pt-4">
           <div className="flex justify-between text-base font-black text-foreground">

@@ -184,15 +184,11 @@ export default function AdminLoginPage() {
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 via-indigo-600 to-indigo-600 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity blur" />
 
           <div className="relative bg-slate-900 rounded-xl p-8 border border-indigo-600 border-opacity-30 shadow-2xl">
-            {/* Lock Icon */}
-            <div className="flex justify-center mb-8">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-                className="p-3 bg-indigo-600 bg-opacity-20 rounded-full"
-              >
-                <Lock className="w-6 h-6 text-indigo-500" />
-              </motion.div>
+            {/* Company Logo */}
+            <div className="flex justify-center mb-6">
+              <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-xl border border-indigo-500/30 bg-slate-950 p-1">
+                <img src="/rvc-logo.png" alt="RVC Logo" className="w-full h-full object-cover rounded-xl" />
+              </div>
             </div>
 
             {/* Credentials Step */}

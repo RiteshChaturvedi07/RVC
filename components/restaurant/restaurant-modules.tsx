@@ -233,74 +233,8 @@ export function RestaurantMarketing() {
   )
 }
 
-export function RestaurantStaff() {
-  const state = useRestaurant(async t => {
-    const { data, error } = await s().from('profiles').select('id,full_name,phone,role').eq('tenant_id', t)
-    if (error) throw error
-    return (data ?? []) as unknown as StaffProfileRow[]
-  })
-  const [email, setEmail] = useState(''),
-    [notice, setNotice] = useState(''),
-    [busy, setBusy] = useState(false)
-  const add = async () => {
-    if (!email.trim()) return setNotice('Enter the staff member’s RVC login email.')
-    setBusy(true)
-    const { error } = await s().rpc('restaurant_add_staff', { p_email: email.trim() })
-    setBusy(false)
-    if (error) setNotice(error.message)
-    else {
-      setEmail('')
-      setNotice('Staff member added.')
-      state.reload()
-    }
-  }
-  const remove = async (id: string) => {
-    if (!confirm('Remove this staff member’s restaurant access?')) return
-    setBusy(true)
-    const { error } = await s().rpc('restaurant_remove_staff', { p_profile_id: id })
-    setBusy(false)
-    if (error) setNotice(error.message)
-    else {
-      setNotice('Staff member removed.')
-      state.reload()
-    }
-  }
-  if (!state.data) return <RestaurantSimpleWorkspace title="Staff" description={state.error || 'Loading staff…'} />
-  return (
-    <RestaurantSimpleWorkspace title="Staff" description="Add people who have already registered an RVC account, then remove access whenever needed.">
-      <div className="mb-5 flex gap-2">
-        <input
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          type="email"
-          placeholder="staff@example.com"
-          className="flex-1 rounded-xl border border-border p-2"
-        />
-        <button disabled={busy} onClick={add} className="rounded-xl bg-primary px-4 text-sm text-primary-foreground disabled:opacity-50">
-          Add staff
-        </button>
-      </div>
-      {notice && <p className="mb-3 rounded-xl bg-primary/10 p-3 text-sm text-primary">{notice}</p>}
-      <div className="space-y-2">
-        {state.data.map(p => (
-          <div key={p.id} className="flex items-center justify-between rounded-xl border border-border p-4">
-            <span>
-              <b>{p.full_name || 'Unnamed staff'}</b>
-              <small className="ml-2 text-muted-foreground">{p.phone || '—'}</small>
-            </span>
-            {p.role === 'staff' ? (
-              <button disabled={busy} onClick={() => remove(p.id)} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600">
-                Remove
-              </button>
-            ) : (
-              <span className="capitalize text-sm">{p.role.replace('_', ' ')}</span>
-            )}
-          </div>
-        ))}
-      </div>
-    </RestaurantSimpleWorkspace>
-  )
-}
+import { RestaurantStaff as MainRestaurantStaff } from './restaurant-staff'
+export const RestaurantStaff = MainRestaurantStaff
 
 export function RestaurantSupport() {
   const state = useRestaurant(async t => {

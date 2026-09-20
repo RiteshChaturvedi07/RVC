@@ -27,6 +27,7 @@ import {
   X,
   Zap,
   PartyPopper,
+  Gift,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -108,8 +109,14 @@ type SaaSPlan = {
   id: string
   name: string
   slug?: string
+  target_vertical?: string
+  billing_interval?: string
   price_monthly: number
+  price_quarterly?: number
   price_yearly: number
+  promotional_perk?: string | null
+  onboarding_offer_type?: 'trial_7_day' | 'promotional_bundle' | 'direct_paid' | 'free_tier'
+  badge_text?: string | null
   features: string[]
   is_popular?: boolean
 }
@@ -118,40 +125,69 @@ const FALLBACK_PLANS: SaaSPlan[] = [
   {
     id: '00000000-0000-0000-0000-000000000001',
     name: 'Starter Restaurant OS',
+    target_vertical: 'restaurant',
     price_monthly: 999,
+    price_quarterly: 2499,
     price_yearly: 9588,
+    promotional_perk: 'Get 5 Free QR Table Acrylic Stickers',
+    onboarding_offer_type: 'trial_7_day',
+    badge_text: 'Popular Choice',
     features: ['Up to 15 Tables', 'Sub-second QR Ordering', 'Live Kitchen KDS', 'Direct UPI Payments', 'Standard Analytics'],
   },
   {
     id: '00000000-0000-0000-0000-000000000002',
-    name: 'Growth Restaurant OS',
+    name: 'Growth 3-Month Promo Bundle',
+    target_vertical: 'restaurant',
     price_monthly: 1999,
+    price_quarterly: 4999,
     price_yearly: 19190,
+    promotional_perk: 'Get 10 Free QR Acrylic Stands + Free AI Menu Digitization',
+    onboarding_offer_type: 'promotional_bundle',
+    badge_text: '🎁 3-Month Free Gift Bundle',
     is_popular: true,
-    features: ['Unlimited Tables', 'Multi-Captain KDS Displays', 'WhatsApp Marketing Automation', 'Inventory & Ingredient Track', 'Priority 24/7 Support'],
+    features: ['Unlimited Tables', '10 Free Acrylic Stands Included', 'Multi-Captain KDS Displays', 'WhatsApp Marketing Automation', 'Inventory & Ingredient Track', 'Priority 24/7 Support'],
   },
   {
     id: '00000000-0000-0000-0000-000000000003',
-    name: 'Multi-Outlet Pro',
+    name: 'Multi-Outlet Pro Enterprise',
+    target_vertical: 'restaurant',
     price_monthly: 3999,
+    price_quarterly: 9999,
     price_yearly: 38390,
-    features: ['Multi-Branch Central Hub', 'Custom Domain Integration', 'Advanced Audit & Staff Roles', 'Dedicated Account Manager', 'Custom API Webhooks'],
+    promotional_perk: 'Get 25 Free QR Acrylic Stands + Dedicated Onboarding Manager',
+    onboarding_offer_type: 'trial_7_day',
+    badge_text: 'Enterprise',
+    features: ['Multi-Branch Central Hub', '25 Free Acrylic Stands Included', 'Custom Domain Integration', 'Advanced Audit & Staff Roles', 'Dedicated Account Manager'],
   },
 ]
 
 function formatErrorMessage(err: unknown): string {
   if (!err) return 'Registration failed. Please try again.'
-  if (typeof err === 'string' && err.trim()) return err
-  if (err instanceof Error && err.message) return err.message
-  if (typeof err === 'object' && err !== null) {
+  let rawMsg = ''
+  if (typeof err === 'string') rawMsg = err.trim()
+  else if (err instanceof Error && err.message) rawMsg = err.message
+  else if (typeof err === 'object' && err !== null) {
     const obj = err as Record<string, unknown>
-    if (typeof obj.message === 'string' && obj.message) return obj.message
-    if (typeof obj.error_description === 'string' && obj.error_description) return obj.error_description
-    if (typeof obj.error === 'string' && obj.error) return obj.error
-    if (typeof obj.msg === 'string' && obj.msg) return obj.msg
-    if (typeof obj.details === 'string' && obj.details) return obj.details
+    if (typeof obj.message === 'string') rawMsg = obj.message
+    else if (typeof obj.error_description === 'string') rawMsg = obj.error_description
+    else if (typeof obj.error === 'string') rawMsg = obj.error
+    else if (typeof obj.msg === 'string') rawMsg = obj.msg
+    else if (typeof obj.details === 'string') rawMsg = obj.details
+    else {
+      try {
+        const jsonStr = JSON.stringify(err)
+        if (jsonStr && jsonStr !== '{}') rawMsg = jsonStr
+      } catch {
+        rawMsg = ''
+      }
+    }
   }
-  return 'Registration failed. Please check your credentials and try again.'
+
+  rawMsg = rawMsg.trim()
+  if (!rawMsg || rawMsg === '{}' || rawMsg === '[object Object]') {
+    return 'Registration failed. Please check your credentials or select another plan tier.'
+  }
+  return rawMsg
 }
 
 type FormDataState = {
@@ -166,7 +202,7 @@ type FormDataState = {
   password: string
   confirmPassword: string
   planId: string
-  billingCycle: 'monthly' | 'yearly'
+  billingCycle: 'monthly' | 'quarterly' | 'yearly'
 }
 
 export default function RegisterPage() {
@@ -201,7 +237,7 @@ export default function RegisterPage() {
     password: '',
     confirmPassword: '',
     planId: '00000000-0000-0000-0000-000000000002',
-    billingCycle: 'monthly',
+    billingCycle: 'quarterly',
   })
 
   // Errors state
@@ -214,7 +250,7 @@ export default function RegisterPage() {
       try {
         let rawPlans: any[] | null = null
 
-        // 1. Try RPC function (SECURITY DEFINER granted to anon & authenticated)
+        // 1. Try RPC function (SECURITY DEFINER)
         const { data: rpcData } = await supabase.rpc('get_active_saas_plans')
         if (rpcData && Array.isArray(rpcData) && rpcData.length > 0) {
           rawPlans = rpcData
@@ -249,11 +285,22 @@ export default function RegisterPage() {
               parsedFeatures = Object.values(p.features).map(String)
             }
 
+            const monthlyPrice = Number(p.price_monthly || 0)
+            const quarterlyPrice = Number(p.price_quarterly || Math.round(monthlyPrice * 2.7))
+            const yearlyPrice = Number(p.price_yearly || monthlyPrice * 10)
+
             return {
               id: String(p.id),
               name: String(p.name || 'SaaS Plan'),
-              price_monthly: Number(p.price_monthly || 0),
-              price_yearly: Number(p.price_yearly || Number(p.price_monthly || 0) * 10),
+              slug: p.slug ? String(p.slug) : undefined,
+              target_vertical: p.target_vertical ? String(p.target_vertical) : 'restaurant',
+              billing_interval: p.billing_interval ? String(p.billing_interval) : 'monthly',
+              price_monthly: monthlyPrice,
+              price_quarterly: quarterlyPrice,
+              price_yearly: yearlyPrice,
+              promotional_perk: p.promotional_perk ? String(p.promotional_perk) : null,
+              onboarding_offer_type: p.onboarding_offer_type || 'trial_7_day',
+              badge_text: p.badge_text ? String(p.badge_text) : null,
               features: parsedFeatures.length > 0 ? parsedFeatures : ['All core features included'],
               is_popular: Boolean(p.is_popular),
             }
@@ -272,6 +319,12 @@ export default function RegisterPage() {
     }
     void fetchPlans()
   }, [])
+
+  // Filter plans based on target vertical domain selected in Step 1
+  const domainFilteredPlans = useMemo(() => {
+    const matched = plans.filter((p) => (p.target_vertical || 'restaurant').toLowerCase() === formData.vertical.toLowerCase())
+    return matched.length > 0 ? matched : plans
+  }, [plans, formData.vertical])
 
   // City options based on state selection
   const cityOptions = useMemo(() => {
@@ -299,7 +352,7 @@ export default function RegisterPage() {
     }
   }
 
-  // --- Enterprise Password Strength Evaluator ---
+  // --- Password Strength Evaluator ---
   const passwordChecks = useMemo(() => {
     const p = formData.password
     return {
@@ -350,7 +403,7 @@ export default function RegisterPage() {
         newErrors.confirmPassword = 'Passwords do not match'
       }
     } else if (currentStep === 3) {
-      if (!formData.planId) newErrors.planId = 'Please select a trial plan'
+      if (!formData.planId) newErrors.planId = 'Please select a plan'
     }
 
     setErrors(newErrors)
@@ -403,10 +456,17 @@ export default function RegisterPage() {
     setSubmitError('')
 
     const finalCity = formData.city === 'Custom / Other' ? formData.customCity : formData.city
+    const selectedPlan = plans.find((p) => p.id === formData.planId) || domainFilteredPlans[0]
 
-    // Validate if planId is a valid UUID for PostgreSQL trigger
+    // Validate if planId is a valid UUID that exists in database saas_plans table
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(formData.planId)
-    const validPlanIdUuid = isUuid ? formData.planId : null
+    const planExistsInDb = plans.some((p) => p.id === formData.planId)
+    const validPlanIdUuid = isUuid && planExistsInDb ? formData.planId : null
+
+    const offerType = selectedPlan?.onboarding_offer_type || 'trial_7_day'
+    const isTrial = offerType === 'trial_7_day'
+    const trialDays = isTrial ? 7 : 0
+    const subStatus = isTrial ? 'trial' : 'active'
 
     try {
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -418,14 +478,16 @@ export default function RegisterPage() {
             full_name: formData.ownerName.trim(),
             phone: `+91${formData.phone.trim()}`,
             business_name: formData.businessName.trim(),
-            business_type: 'restaurant',
-            plan: formData.planId,
+            business_type: formData.vertical,
+            plan: selectedPlan?.slug || formData.planId,
             plan_id: validPlanIdUuid,
             plan_billing_cycle: formData.billingCycle,
+            onboarding_offer_type: offerType,
+            promotional_perk: selectedPlan?.promotional_perk || null,
             state: formData.state,
             city: finalCity,
-            trial_period: 7,
-            subscription_status: 'trial',
+            trial_period: trialDays,
+            subscription_status: subStatus,
           },
         },
       })
@@ -436,7 +498,14 @@ export default function RegisterPage() {
         throw new Error('Account initialized, but session failed. Please log in.')
       }
 
-      toast.success('Welcome to RVC! Your 7-day free trial is live.')
+      if (offerType === 'promotional_bundle') {
+        toast.success(`Welcome to RVC! Your 3-month promo bundle with free gift perks is active.`)
+      } else if (isTrial) {
+        toast.success('Welcome to RVC! Your 7-day free trial is live.')
+      } else {
+        toast.success('Welcome to RVC! Your business workspace is ready.')
+      }
+
       router.push('/restaurant-dashboard')
     } catch (err: unknown) {
       const errorMessage = formatErrorMessage(err)
@@ -455,7 +524,7 @@ export default function RegisterPage() {
         <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[650px] h-[450px] bg-gradient-to-tr from-indigo-600/15 via-purple-600/10 to-emerald-500/15 rounded-full blur-3xl opacity-60" />
       </div>
 
-      <div className="w-full max-w-2xl space-y-6">
+      <div className="w-full max-w-3xl space-y-6">
         
         {/* Top Header & Brand Link */}
         <div className="flex items-center justify-between px-2">
@@ -468,7 +537,7 @@ export default function RegisterPage() {
                 RVC
               </span>
               <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-bold -mt-1">
-                Multi-Vertical OS
+                Multi-Domain OS
               </span>
             </div>
           </Link>
@@ -481,9 +550,9 @@ export default function RegisterPage() {
         {/* Dynamic 3-Step Stepper Header */}
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-4 shadow-sm flex items-center justify-between text-xs font-bold font-mono">
           {[
-            { num: 1, title: 'Vertical' },
+            { num: 1, title: 'Business Domain' },
             { num: 2, title: 'Credentials' },
-            { num: 3, title: '7-Day Free Trial' },
+            { num: 3, title: 'SaaS Plan & Perks' },
           ].map((s, idx) => {
             const isCompleted = step > s.num
             const isCurrent = step === s.num
@@ -819,7 +888,7 @@ export default function RegisterPage() {
                       </div>
                     </div>
 
-                    {/* Animated Strength Meter & Requirements Pills */}
+                    {/* Animated Strength Meter */}
                     <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-semibold text-slate-600 dark:text-slate-400">Password Strength</span>
@@ -828,7 +897,6 @@ export default function RegisterPage() {
                         </span>
                       </div>
 
-                      {/* Bar indicator */}
                       <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden flex">
                         <div
                           className={`h-full transition-all duration-300 ${
@@ -843,7 +911,6 @@ export default function RegisterPage() {
                         />
                       </div>
 
-                      {/* Checklist */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1 text-[10px]">
                         <span className={`flex items-center gap-1 font-semibold ${passwordChecks.length ? 'text-emerald-500' : 'text-slate-400'}`}>
                           {passwordChecks.length ? <Check className="w-3 h-3" /> : '○'} Min 8 chars
@@ -877,13 +944,13 @@ export default function RegisterPage() {
                     onClick={handleNext}
                     className="px-7 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2"
                   >
-                    Proceed to 7-Day Trial <ArrowRight className="w-4 h-4" />
+                    Proceed to SaaS Plan & Perks <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             )}
 
-            {/* ================= STEP 3: HIGH-CONVERTING 7-DAY FREE TRIAL ACTIVATION ================= */}
+            {/* ================= STEP 3: SAAS PLAN & OFFER BUNDLE ACTIVATION ================= */}
             {step === 3 && (
               <div className="space-y-6">
                 
@@ -891,26 +958,26 @@ export default function RegisterPage() {
                 <div>
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-wider mb-2">
                     <PartyPopper className="w-3.5 h-3.5" />
-                    Step 3 of 3 • Trial Provisioning
+                    Step 3 of 3 • Offer Bundle Activation
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
-                    Select Your Plan to Start 7-Day Free Trial
+                    Select SaaS Plan & Activate Registration Offer
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1">
-                    Experience the full power of RVC OS completely free for 7 days. Upgrade or cancel anytime after login.
+                    Choose your operating tier. Enjoy 3-month promotional bundle perks or a 7-day free trial.
                   </p>
                 </div>
 
                 {/* Animated Celebration Banner */}
-                <div className="bg-gradient-to-r from-emerald-500/15 via-indigo-500/15 to-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 rounded-2xl p-4 text-center font-semibold text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2">
+                <div className="bg-gradient-to-r from-emerald-500/15 via-purple-500/15 to-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 rounded-2xl p-4 text-center font-semibold text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2">
                   <Sparkles className="w-5 h-5 text-amber-400 flex-shrink-0 animate-pulse" />
                   <span>
-                    🎉 <strong>Congratulations!</strong> 7-Day Full Feature Free Trial Active (<strong>₹0 Due Today</strong> • No Upfront Payment Mandate)
+                    🎉 <strong>Exclusive Onboarding Offer Active:</strong> Includes Free QR Stands + 0% Commission UPI Payments
                   </span>
                 </div>
 
                 {/* Billing Cycle Toggle */}
-                <div className="flex items-center justify-center gap-3 p-1.5 rounded-2xl bg-slate-200/70 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 w-fit mx-auto text-xs font-bold">
+                <div className="flex items-center justify-center gap-2 p-1.5 rounded-2xl bg-slate-200/70 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 w-fit mx-auto text-xs font-bold">
                   <button
                     type="button"
                     onClick={() => setFormData((p) => ({ ...p, billingCycle: 'monthly' }))}
@@ -920,8 +987,24 @@ export default function RegisterPage() {
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    Monthly Tier
+                    Monthly (1 Mo)
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormData((p) => ({ ...p, billingCycle: 'quarterly' }))}
+                    className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
+                      formData.billingCycle === 'quarterly'
+                        ? 'bg-purple-600 text-white shadow-md'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <span>Quarterly (3-Mo Bundle)</span>
+                    <span className="px-1.5 py-0.5 rounded-md bg-purple-500 text-white text-[10px] font-extrabold animate-pulse">
+                      🎁 Free Perks
+                    </span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setFormData((p) => ({ ...p, billingCycle: 'yearly' }))}
@@ -931,9 +1014,9 @@ export default function RegisterPage() {
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    <span>Yearly Tier</span>
-                    <span className="px-1.5 py-0.5 rounded-md bg-emerald-500 text-white text-[10px] font-extrabold animate-pulse">
-                      Save ~20% 🎉
+                    <span>Yearly (12 Mo)</span>
+                    <span className="px-1.5 py-0.5 rounded-md bg-emerald-500 text-white text-[10px] font-extrabold">
+                      Save ~20%
                     </span>
                   </button>
                 </div>
@@ -947,12 +1030,18 @@ export default function RegisterPage() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {plans.map((plan) => {
+                    {domainFilteredPlans.map((plan) => {
                       const isSelected = formData.planId === plan.id
+                      const quarterlyPrice = Number(plan.price_quarterly || Math.round(plan.price_monthly * 2.7))
+                      
                       const displayPrice =
                         formData.billingCycle === 'yearly'
                           ? Math.round(plan.price_yearly / 12)
+                          : formData.billingCycle === 'quarterly'
+                          ? Math.round(quarterlyPrice / 3)
                           : plan.price_monthly
+
+                      const offerType = plan.onboarding_offer_type || 'trial_7_day'
 
                       return (
                         <button
@@ -967,7 +1056,7 @@ export default function RegisterPage() {
                         >
                           {plan.is_popular && (
                             <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-emerald-500 text-white text-[10px] font-extrabold shadow-md whitespace-nowrap">
-                              ⭐ Recommended for Trial
+                              ⭐ Recommended Plan
                             </div>
                           )}
 
@@ -978,15 +1067,41 @@ export default function RegisterPage() {
                               </h3>
                             </div>
 
-                            <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold border border-emerald-500/30 mb-2">
-                              🟢 7-Day Free Trial Included
-                            </span>
+                            {/* Offer Badge Pill */}
+                            <div className="mb-2">
+                              {offerType === 'trial_7_day' && (
+                                <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold border border-emerald-500/30">
+                                  🟢 7-Day Free Trial Included
+                                </span>
+                              )}
+                              {offerType === 'promotional_bundle' && (
+                                <span className="inline-block px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-300 text-[10px] font-bold border border-purple-500/30">
+                                  🎁 3-Month Bundle + Free Perks
+                                </span>
+                              )}
+                              {offerType === 'direct_paid' && (
+                                <span className="inline-block px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 text-[10px] font-bold border border-blue-500/30">
+                                  ⚡ Instant Paid Activation
+                                </span>
+                              )}
+                              {offerType === 'free_tier' && (
+                                <span className="inline-block px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] font-bold border border-amber-500/30">
+                                  ✨ Permanent Free Tier
+                                </span>
+                              )}
+                            </div>
 
+                            {/* Price display */}
                             <div className="my-2">
                               <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400 font-mono">
                                 ₹{displayPrice.toLocaleString('en-IN')}
                               </span>
-                              <span className="text-xs text-slate-500"> /mo post-trial</span>
+                              <span className="text-xs text-slate-500"> /mo</span>
+                              {formData.billingCycle === 'quarterly' && (
+                                <div className="text-[10px] text-purple-400 font-semibold mt-0.5">
+                                  Billed quarterly (₹{quarterlyPrice.toLocaleString('en-IN')}/3 mo)
+                                </div>
+                              )}
                               {formData.billingCycle === 'yearly' && (
                                 <div className="text-[10px] text-emerald-500 font-semibold mt-0.5">
                                   Billed annually (₹{plan.price_yearly.toLocaleString('en-IN')}/yr)
@@ -994,7 +1109,19 @@ export default function RegisterPage() {
                               )}
                             </div>
 
-                            <ul className="space-y-1.5 text-[11px] text-slate-600 dark:text-slate-300 font-medium">
+                            {/* Free Promotional Gift Box */}
+                            {plan.promotional_perk && (
+                              <div className="my-2.5 p-2.5 rounded-xl border border-purple-500/40 bg-purple-500/10 text-[11px] font-semibold text-purple-300 flex items-start gap-1.5">
+                                <Gift className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="text-[9px] uppercase font-bold text-purple-400 block">Free Gift Included:</span>
+                                  <span>{plan.promotional_perk}</span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Entitlements Checklist */}
+                            <ul className="space-y-1.5 text-[11px] text-slate-600 dark:text-slate-300 font-medium mt-3">
                               {plan.features.map((f, i) => (
                                 <li key={i} className="flex items-center gap-1.5">
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
@@ -1011,7 +1138,7 @@ export default function RegisterPage() {
                                 : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                             }`}
                           >
-                            {isSelected ? 'Selected for Trial ✓' : 'Select Tier for Trial'}
+                            {isSelected ? 'Selected Plan ✓' : 'Select This Plan'}
                           </div>
                         </button>
                       )
@@ -1041,11 +1168,11 @@ export default function RegisterPage() {
                       className="px-8 py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-bold text-sm sm:text-base shadow-xl shadow-emerald-600/30 hover:scale-[1.02] transition-all flex items-center gap-2 disabled:opacity-50"
                     >
                       {isSubmitting ? (
-                        'Activating 7-Day Trial...'
+                        'Activating Business Workspace...'
                       ) : (
                         <>
                           <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />
-                          🚀 Start 7-Day Free Trial & Launch Dashboard →
+                          🚀 Activate Plan & Launch Workspace →
                         </>
                       )}
                     </button>
@@ -1054,7 +1181,7 @@ export default function RegisterPage() {
                   {/* Reassurance Footer Note */}
                   <p className="text-[11px] text-center text-slate-500 dark:text-slate-400 font-medium flex items-center justify-center gap-1.5 pt-1">
                     <Lock className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>Zero Payment Required Today • Full Access to QR Orders & Live KDS • Upgrade inside Dashboard anytime</span>
+                    <span>Instant Workspace Provisioning • Full Access to QR Orders & Live KDS • 24/7 Support</span>
                   </p>
                 </div>
               </div>
