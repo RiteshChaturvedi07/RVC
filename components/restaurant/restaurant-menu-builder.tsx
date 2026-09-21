@@ -425,9 +425,88 @@ export function RestaurantMenuBuilder() {
     }
   }
 
+  // Helper parser to turn raw OCR / paper menu text into structured dish objects
+  const parseMenuTextToDishes = (text: string): ExtractedItem[] => {
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    let currentCategory = 'Starters & Main Course'
+    const parsedList: ExtractedItem[] = []
+
+    for (const line of lines) {
+      const cleanLine = line.replace(/^[•\*\-\.\d\)\(🟢🔴🟡]+\s*/, '').trim()
+      if (!cleanLine || cleanLine.length < 2) continue
+
+      // Detect category header line
+      const isCategoryHeader =
+        /^(starters|appetizers|main course|breads|roti|biryani|rice|beverages|drinks|desserts|soups|salads|south indian|chinese|fast food|pizzas|burgers|combos|thali|tandoor|snacks|ice cream|shakes|sides)/i.test(
+          cleanLine
+        ) ||
+        (!/\d+/.test(cleanLine) &&
+          cleanLine.length > 2 &&
+          cleanLine.length < 35 &&
+          cleanLine === cleanLine.toUpperCase())
+
+      if (isCategoryHeader && !/\d{2,}/.test(cleanLine)) {
+        const rawCat = cleanLine.replace(/[:\-_=\.\*]/g, '').trim()
+        if (rawCat) {
+          currentCategory = rawCat.charAt(0).toUpperCase() + rawCat.slice(1).toLowerCase()
+        }
+        continue
+      }
+
+      // Dish & Price Matching (Pattern A: Name ... 280, Pattern B: ₹280 Name, Pattern C: Name 280)
+      const matchA = cleanLine.match(
+        /^(.+?)(?:\s*[\.\-–:=]+\s*|\s+)(?:₹|Rs\.?|INR|USD|\$)?\s*(\d{2,5})(?:\s*\/-|\s*00)?(?:\s*\(.*?\))?$/i
+      )
+      const matchB = cleanLine.match(/^(?:₹|Rs\.?|INR|\$)?\s*(\d{2,5})\s+(.+)$/i)
+      const matchC = cleanLine.match(/^(.+?)\s+(\d{2,5})$/i)
+
+      let name = ''
+      let price = 0
+
+      if (matchA && matchA[1] && matchA[2]) {
+        name = matchA[1].trim()
+        price = Number(matchA[2])
+      } else if (matchB && matchB[1] && matchB[2]) {
+        name = matchB[2].trim()
+        price = Number(matchB[1])
+      } else if (matchC && matchC[1] && matchC[2]) {
+        name = matchC[1].trim()
+        price = Number(matchC[2])
+      }
+
+      if (name && price > 0 && price < 50000) {
+        name = name.replace(/^[\.\-–:=]+|[\.\-–:=]+$/g, '').trim()
+        if (
+          name.length >= 2 &&
+          !/^(total|subtotal|tax|gst|bill|thank you|visit|page|table|menu|price|amount|sr|sl)/i.test(name)
+        ) {
+          const isNonVeg =
+            /chicken|mutton|fish|egg|prawn|meat|kabab|kebab|non-veg|nonveg|beef|pork|lamb/i.test(name) ||
+            line.toLowerCase().includes('non-veg') ||
+            line.toLowerCase().includes('non veg')
+
+          parsedList.push({
+            id: Math.random().toString(36).slice(2),
+            name: name
+              .split(' ')
+              .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+              .join(' '),
+            category: currentCategory,
+            price,
+            veg: !isNonVeg,
+            selected: true,
+          })
+        }
+      }
+    }
+
+    return parsedList
+  }
+
   // ACCURATE 100% OCR & PAPER MENU IMAGE SCANNER
   const handleAiMenuScan = async (file: File) => {
     setScanningAi(true)
+    setNotice('')
 
     // Preview URL
     const previewUrl = URL.createObjectURL(file)
@@ -438,61 +517,53 @@ export function RestaurantMenuBuilder() {
       if (file.type.includes('text') || file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
         extractedText = await file.text()
       } else {
-        // OCR text extraction simulation based on file metadata or client reader
-        extractedText = `
-        Starters
-        Paneer Tikka - ₹240 (Veg)
-        Veg Spring Roll - ₹180 (Veg)
-        Chicken Malai Tikka - ₹290 (Non-Veg)
-
-        Main Course
-        Paneer Butter Masala - ₹280 (Veg)
-        Dal Makhani - ₹220 (Veg)
-        Butter Naan - ₹45 (Veg)
-        Kadhai Chicken - ₹320 (Non-Veg)
-
-        Beverages & Desserts
-        Cold Coffee with Ice Cream - ₹140 (Veg)
-        Gulab Jamun (2 pcs) - ₹90 (Veg)
-        `
+        try {
+          const tesseract = await import('tesseract.js')
+          const result = await tesseract.recognize(file, 'eng')
+          extractedText = result.data.text
+        } catch {
+          // Fallback text extraction if worker is offline
+          extractedText = await file.text().catch(() => '')
+        }
       }
 
-      // Parse lines into dishes with regex
-      const lines = extractedText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-      let currentCategory = 'Main Course'
-      const parsedList: ExtractedItem[] = []
+      let parsedList = parseMenuTextToDishes(extractedText)
 
-      for (const line of lines) {
-        if (!line.includes('₹') && !line.includes('Rs') && !/\d+/.test(line)) {
-          if (line.length > 2 && line.length < 35) {
-            currentCategory = line.replace(/[:\-_]/g, '').trim()
+      // Fallback if line format has prices separated by whitespace
+      if (parsedList.length === 0 && extractedText) {
+        const rawLines = extractedText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+        let fallbackCat = 'Main Course'
+        rawLines.forEach((l) => {
+          const numMatch = l.match(/(\d{2,4})/)
+          if (numMatch) {
+            const cleanN = l.replace(numMatch[1], '').replace(/[^a-zA-Z\s]/g, '').trim()
+            if (cleanN.length >= 3) {
+              parsedList.push({
+                id: Math.random().toString(36).slice(2),
+                name: cleanN,
+                category: fallbackCat,
+                price: Number(numMatch[1]),
+                veg: !/chicken|mutton|fish|egg|non-veg/i.test(cleanN),
+                selected: true,
+              })
+            }
+          } else if (l.length < 25) {
+            fallbackCat = l
           }
-          continue
-        }
+        })
+      }
 
-        // Match dish name and price
-        const match = line.match(/^(.+?)(?:\s*[-–:]\s*|\s+)(?:₹|Rs\.?|INR)?\s*(\d+)/i)
-        if (match) {
-          const rawName = match[1].replace(/^(🟢|🔴|🟡|\*|-|\d+\.)/g, '').trim()
-          const price = Number(match[2]) || 150
-          const isNonVeg = /chicken|mutton|fish|egg|prawn|meat/i.test(rawName) || line.toLowerCase().includes('non-veg')
-
-          if (rawName.length >= 2) {
-            parsedList.push({
-              id: Math.random().toString(36).slice(2),
-              name: rawName,
-              category: currentCategory,
-              price,
-              veg: !isNonVeg,
-              selected: true,
-            })
-          }
-        }
+      if (parsedList.length === 0) {
+        setNotice(
+          '⚠️ Could not auto-detect dishes from this image. Try uploading a clearer paper menu photo or CSV/TXT file, or use Starter Templates.'
+        )
+      } else {
+        setNotice(`✨ Extracted ${parsedList.length} dishes from paper menu! Review details below and click Import.`)
       }
 
       setAiScannedItems(parsedList)
-    } catch (e) {
-      setNotice('Error reading file text.')
+    } catch (e: any) {
+      setNotice(`Error scanning menu image: ${e.message || 'Unable to process image'}`)
     } finally {
       setScanningAi(false)
     }

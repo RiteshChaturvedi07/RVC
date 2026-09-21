@@ -83,7 +83,9 @@ export function CustomerBillPrintModal({
 
         <div className="my-4 rounded-xl border bg-muted/30 p-4 font-mono text-xs">
           <div className="text-center font-bold">{data.restaurant}</div>
-          <div className="text-center text-muted-foreground">Order #{data.orderNumber} · Table {data.table}</div>
+          <div className="text-center text-muted-foreground">
+            Order {typeof data.orderNumber === 'string' && data.orderNumber.startsWith('#') ? data.orderNumber : `#${data.orderNumber}`} · Table {data.table}
+          </div>
           <div className="my-2 border-t border-dashed" />
           {data.items.map((item, index) => (
             <div key={index} className="flex justify-between py-1">

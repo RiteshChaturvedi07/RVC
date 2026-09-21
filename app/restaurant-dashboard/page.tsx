@@ -420,6 +420,42 @@ export default function RestaurantOverview() {
     (o) => o.bill_requested && o.payment_status !== 'paid' && o.status !== 'cancelled'
   )
 
+  // Group bill requests by table for consolidated table bill cards
+  const billRequestTables = (() => {
+    const tableMap = new Map<string, {
+      table_id: string
+      table_number: string
+      requested_payment_mode: string
+      requested_at: string
+      totalBill: number
+      orders: Order[]
+    }>()
+
+    data.orders
+      .filter((o) => o.bill_requested && o.payment_status !== 'paid' && o.status !== 'cancelled')
+      .forEach((o) => {
+        const tableId = o.restaurant_tables?.id || o.table_id || 'unknown'
+        const tableNum = formatTableBadge(o.restaurant_tables?.table_number)
+
+        if (tableMap.has(tableId)) {
+          const existing = tableMap.get(tableId)!
+          existing.orders.push(o)
+          existing.totalBill += Number(o.total || 0)
+        } else {
+          tableMap.set(tableId, {
+            table_id: tableId,
+            table_number: tableNum,
+            requested_payment_mode: o.requested_payment_mode || 'cash',
+            requested_at: o.bill_requested_at || o.created_at,
+            totalBill: Number(o.total || 0),
+            orders: [o],
+          })
+        }
+      })
+
+    return Array.from(tableMap.values())
+  })()
+
   const occupiedTablesCount = data.tables.filter((t) => ['occupied', 'bill_requested'].includes(t.status)).length
   const occupiedPercentage = data.tables.length
     ? Math.round((occupiedTablesCount / data.tables.length) * 100)
@@ -484,28 +520,73 @@ export default function RestaurantOverview() {
     })
   }
 
-  const openBillPrint = (order: Order) => {
-    const subtotal = order.subtotal || order.total
+  const openBillPrint = (targetOrders: Order | Order[]) => {
+    const orderList = Array.isArray(targetOrders) ? targetOrders : [targetOrders]
+    if (!orderList.length) return
+
+    const firstOrder = orderList[0]
+    const tableId = firstOrder.restaurant_tables?.id || firstOrder.table_id
+
+    // Find all active/unsettled orders for this table session if available
+    let allTableOrders = orderList
+    if (tableId && data?.orders) {
+      const matchingTableOrders = data.orders.filter(
+        (o) => (o.restaurant_tables?.id === tableId || o.table_id === tableId) &&
+               o.payment_status !== 'paid' &&
+               o.status !== 'cancelled'
+      )
+      if (matchingTableOrders.length > 0) {
+        allTableOrders = matchingTableOrders
+      }
+    }
+
+    const orderNumbersStr = Array.from(new Set(allTableOrders.map((o) => `#${o.order_number}`))).join(', ')
+
+    // Consolidate order items
+    const itemMap = new Map<string, { name: string; quantity: number; unitPrice: number; lineTotal: number }>()
+
+    allTableOrders.forEach((o) => {
+      ;(o.restaurant_order_items || []).forEach((i) => {
+        const key = i.item_name
+        const unitPrice = i.unit_price || (i.line_total ? i.line_total / i.quantity : 0)
+        const lineTotal = i.line_total || unitPrice * i.quantity
+
+        if (itemMap.has(key)) {
+          const existing = itemMap.get(key)!
+          existing.quantity += i.quantity
+          existing.lineTotal += lineTotal
+        } else {
+          itemMap.set(key, {
+            name: i.item_name,
+            quantity: i.quantity,
+            unitPrice: unitPrice,
+            lineTotal: lineTotal,
+          })
+        }
+      })
+    })
+
+    const items = Array.from(itemMap.values())
+    const subtotal = allTableOrders.reduce((sum, o) => sum + Number(o.subtotal || o.total), 0)
+    const taxAmount = allTableOrders.reduce((sum, o) => sum + Number(o.tax_amount || 0), 0)
+    const grandTotal = allTableOrders.reduce((sum, o) => sum + Number(o.total), 0)
+    const allPaid = allTableOrders.every((o) => o.payment_status === 'paid')
+
     setBillModalData({
       restaurant: data.settings?.display_name || 'Restaurant Workspace',
       address: data.settings?.address || 'GST Registered Restaurant',
       phone: data.settings?.phone || undefined,
       gstin: data.settings?.gstin || undefined,
       fssaiNo: data.settings?.fssai_no || undefined,
-      table: formatTableBadge(order.restaurant_tables?.table_number),
-      orderNumber: order.order_number,
-      createdAt: order.created_at,
-      items: order.restaurant_order_items.map((i) => ({
-        name: i.item_name,
-        quantity: i.quantity,
-        unitPrice: i.unit_price || (i.line_total ? i.line_total / i.quantity : 0),
-        lineTotal: i.line_total || Number(order.total),
-      })),
+      table: formatTableBadge(firstOrder.restaurant_tables?.table_number),
+      orderNumber: orderNumbersStr,
+      createdAt: firstOrder.created_at,
+      items,
       subtotal,
       taxRate: data.settings?.tax_rate || 5,
-      taxAmount: order.tax_amount || 0,
-      grandTotal: Number(order.total),
-      paymentStatus: order.payment_status === 'paid' ? 'PAID' : 'UNPAID',
+      taxAmount,
+      grandTotal,
+      paymentStatus: allPaid ? 'PAID' : 'UNPAID',
     })
   }
 
@@ -630,7 +711,7 @@ export default function RestaurantOverview() {
       )}
 
       {/* BILL / PAYMENT REQUEST ALERT BANNER */}
-      {billRequestOrders.length > 0 && (
+      {billRequestTables.length > 0 && (
         <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500/60 bg-amber-500/10 p-5 shadow-lg backdrop-blur-md dark:bg-amber-950/40 dark:border-amber-500/80">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/30 pb-3">
             <div className="flex items-center gap-3">
@@ -639,7 +720,7 @@ export default function RestaurantOverview() {
               </span>
               <div>
                 <h2 className="text-base font-extrabold text-amber-900 dark:text-amber-200">
-                  🚨 {billRequestOrders.length} Table{billRequestOrders.length > 1 ? 's' : ''} Requested Bill / Payment!
+                  🚨 {billRequestTables.length} Table{billRequestTables.length > 1 ? 's' : ''} Requested Bill / Payment!
                 </h2>
                 <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
                   Guests have tapped "Request Bill" on their QR menu. Action required to print invoice & settle payment.
@@ -652,28 +733,30 @@ export default function RestaurantOverview() {
           </div>
 
           <div className="mt-3 divide-y divide-amber-500/20">
-            {billRequestOrders.map((order) => (
-              <div key={order.id} className="flex flex-wrap items-center justify-between gap-3 pt-3 first:pt-0">
+            {billRequestTables.map((t) => (
+              <div key={t.table_id} className="flex flex-wrap items-center justify-between gap-3 pt-3 first:pt-0">
                 <div className="flex items-center gap-3">
                   <span className="rounded-xl bg-amber-500 px-3.5 py-1 text-sm font-black text-slate-950 shadow-xs">
-                    {formatTableBadge(order.restaurant_tables?.table_number)}
+                    {t.table_number}
                   </span>
                   <div>
                     <div className="flex items-center gap-2">
-                      <b className="text-sm font-bold text-foreground">Order #{order.order_number}</b>
+                      <b className="text-sm font-bold text-foreground">
+                        {t.orders.length > 1 ? `${t.orders.length} Orders (${t.orders.map((o) => `#${o.order_number}`).join(', ')})` : `Order #${t.orders[0]?.order_number}`}
+                      </b>
                       <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-200">
-                        {order.requested_payment_mode === 'upi' ? '📱 UPI Mode' : '💵 Cash Mode'}
+                        {t.requested_payment_mode === 'upi' ? '📱 UPI Mode' : '💵 Cash Mode'}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Bill Total: <b>{money(order.total)}</b> · Requested {elapsed(order.bill_requested_at || order.created_at)}
+                      Consolidated Bill Total: <b>{money(t.totalBill)}</b> · Requested {elapsed(t.requested_at)}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                   <button
-                    onClick={() => openBillPrint(order)}
+                    onClick={() => openBillPrint(t.orders)}
                     className="rounded-xl border border-amber-500/40 bg-background px-3.5 py-2 text-xs font-bold text-foreground hover:bg-secondary flex items-center gap-1.5"
                   >
                     <Printer className="size-3.5 text-emerald-600" />
@@ -681,7 +764,7 @@ export default function RestaurantOverview() {
                   </button>
 
                   <button
-                    onClick={() => void settleOrder(order.id, 'cash')}
+                    onClick={() => void settleOrder(t.orders[0].id, 'cash')}
                     className="rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700 flex items-center gap-1"
                   >
                     <CreditCard className="size-3.5" />
@@ -689,7 +772,7 @@ export default function RestaurantOverview() {
                   </button>
 
                   <button
-                    onClick={() => void settleOrder(order.id, 'online')}
+                    onClick={() => void settleOrder(t.orders[0].id, 'online')}
                     className="rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 flex items-center gap-1"
                   >
                     <Zap className="size-3.5" />
@@ -1217,10 +1300,17 @@ function TableInspectorModal({
   onSettle: (orderId: string, method: string) => void
   onPrintBill: (order: Order) => void
 }) {
-  const activeOrder =
-    orders.find((o) => o.restaurant_tables?.id === table.id && o.bill_requested && o.payment_status !== 'paid') ||
-    orders.find((o) => o.restaurant_tables?.id === table.id && !['completed', 'cancelled', 'served'].includes(o.status)) ||
-    orders.find((o) => o.restaurant_tables?.id === table.id)
+  const tableOrders = orders.filter(
+    (o) =>
+      (o.restaurant_tables?.id === table.id || o.table_id === table.id) &&
+      o.payment_status !== 'paid' &&
+      !['completed', 'cancelled'].includes(o.status)
+  )
+
+  const totalBill = tableOrders.reduce((sum, o) => sum + Number(o.total || 0), 0)
+  const isBillRequested = tableOrders.some((o) => o.bill_requested)
+  const paymentMode = tableOrders.find((o) => o.requested_payment_mode)?.requested_payment_mode || 'cash'
+  const allItems = tableOrders.flatMap((o) => o.restaurant_order_items)
 
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center bg-black/50 p-4 backdrop-blur-xs">
@@ -1228,60 +1318,64 @@ function TableInspectorModal({
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div>
             <h3 className="text-xl font-extrabold">{formatTableBadge(table.table_number)} Inspector</h3>
-            <p className="text-xs text-muted-foreground capitalize">Status: {table.status}</p>
+            <p className="text-xs text-muted-foreground capitalize">
+              Status: {table.status} {tableOrders.length > 1 ? `(${tableOrders.length} active orders)` : ''}
+            </p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1 hover:bg-secondary">
             <X className="size-5" />
           </button>
         </div>
 
-        {activeOrder ? (
+        {tableOrders.length > 0 ? (
           <div className="mt-4 space-y-4">
-            {activeOrder.bill_requested && activeOrder.payment_status !== 'paid' && (
+            {isBillRequested && (
               <div className="rounded-xl border border-amber-400 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200 animate-pulse font-bold flex items-center gap-2">
                 <BellRing className="size-4 text-amber-500" />
-                <span>Guest requested bill ({activeOrder.requested_payment_mode?.toUpperCase() || 'CASH'})</span>
+                <span>Guest requested bill ({paymentMode.toUpperCase()})</span>
               </div>
             )}
 
-            <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs">
+            <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs space-y-2">
               <div className="flex justify-between font-bold text-sm">
-                <span>Order #{activeOrder.order_number}</span>
-                <span className="capitalize text-primary">{activeOrder.status}</span>
+                <span>Orders: {tableOrders.map((o) => `#${o.order_number}`).join(', ')}</span>
+                <span className="capitalize text-primary">{tableOrders[0]?.status}</span>
               </div>
-              <div className="mt-2 space-y-1">
-                {activeOrder.restaurant_order_items.map((i, idx) => (
-                  <div key={idx} className="flex justify-between">
+
+              <div className="space-y-1 divide-y divide-border/40">
+                {allItems.map((i, idx) => (
+                  <div key={idx} className="flex justify-between pt-1 font-medium">
                     <span>
                       {i.item_name} × {i.quantity}
                     </span>
-                    <span>₹{((i.unit_price || 0) * i.quantity).toFixed(2)}</span>
+                    <span>{money((i.unit_price || 0) * i.quantity)}</span>
                   </div>
                 ))}
               </div>
+
               <div className="mt-3 flex justify-between border-t border-border pt-2 text-sm font-extrabold">
-                <span>Total Bill:</span>
-                <span>{money(activeOrder.total)}</span>
+                <span>Total Consolidated Bill:</span>
+                <span className="text-primary">{money(totalBill)}</span>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => onPrintBill(activeOrder)}
+                onClick={() => onPrintBill(tableOrders[0])}
                 className="rounded-xl border border-border py-2.5 text-xs font-semibold hover:bg-secondary flex items-center justify-center gap-1.5"
               >
                 <Printer className="size-4" /> Print Tax Bill
               </button>
 
               <button
-                onClick={() => onSettle(activeOrder.id, 'cash')}
+                onClick={() => onSettle(tableOrders[0].id, 'cash')}
                 className="rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 flex items-center justify-center gap-1"
               >
                 <CreditCard className="size-4" /> Settle Cash
               </button>
 
               <button
-                onClick={() => onSettle(activeOrder.id, 'online')}
+                onClick={() => onSettle(tableOrders[0].id, 'online')}
                 className="col-span-2 rounded-xl bg-primary py-2.5 text-xs font-bold text-primary-foreground hover:opacity-90 flex items-center justify-center gap-1"
               >
                 <Zap className="size-4" /> Settle UPI / Online

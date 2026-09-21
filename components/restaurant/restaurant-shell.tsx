@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { BarChart3, Boxes, ChefHat, CircleHelp, CreditCard, DollarSign, FileText, Grid2X2, LayoutDashboard, Menu, Moon, PanelLeft, Search, Settings, ShoppingBag, Sparkles, Sun, Users, X } from 'lucide-react'
+import { BarChart3, Boxes, ChefHat, CircleHelp, CreditCard, DollarSign, FileText, Grid2X2, LayoutDashboard, Menu, Moon, PanelLeft, Search, Settings, ShoppingBag, Sparkles, Star, Sun, Users, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const nav = [
-  ['Overview','/restaurant-dashboard',LayoutDashboard], ['Orders','/restaurant-dashboard/orders',ShoppingBag], ['Tables & QR','/restaurant-dashboard/tables',Grid2X2], ['Kitchen','/restaurant-dashboard/kitchen',ChefHat], ['Menu Builder','/restaurant-dashboard/menu',FileText], ['Inventory','/restaurant-dashboard/inventory',Boxes], ['Customers','/restaurant-dashboard/customers',Users], ['Marketing','/restaurant-dashboard/marketing',Sparkles], ['Analytics','/restaurant-dashboard/analytics',BarChart3], ['Finance','/restaurant-dashboard/finance',DollarSign], ['Staff','/restaurant-dashboard/staff',Users], ['Billing','/restaurant-dashboard/billing',CreditCard], ['Support','/restaurant-dashboard/support',CircleHelp], ['Settings','/restaurant-dashboard/settings',Settings],
+  ['Overview','/restaurant-dashboard',LayoutDashboard], ['Orders','/restaurant-dashboard/orders',ShoppingBag], ['Tables & QR','/restaurant-dashboard/tables',Grid2X2], ['Kitchen','/restaurant-dashboard/kitchen',ChefHat], ['Menu Builder','/restaurant-dashboard/menu',FileText], ['Inventory','/restaurant-dashboard/inventory',Boxes], ['Customers','/restaurant-dashboard/customers',Users], ['Reviews','/restaurant-dashboard/reviews',Star], ['Marketing','/restaurant-dashboard/marketing',Sparkles], ['Analytics','/restaurant-dashboard/analytics',BarChart3], ['Finance','/restaurant-dashboard/finance',DollarSign], ['Staff','/restaurant-dashboard/staff',Users], ['Billing','/restaurant-dashboard/billing',CreditCard], ['Support','/restaurant-dashboard/support',CircleHelp], ['Settings','/restaurant-dashboard/settings',Settings],
 ] as const
 
 export function RestaurantShell({ children }: { children: React.ReactNode }) {

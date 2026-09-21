@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useScroll, useTransform, useReducedMotion } from 'framer-motion'
 import {
   ArrowRight,
   QrCode,
@@ -27,6 +27,11 @@ export function Hero() {
   const [waitlistVertical, setWaitlistVertical] = useState('Gym OS')
   const [waitlistEmail, setWaitlistEmail] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const { scrollY } = useScroll()
+  const shouldReduceMotion = useReducedMotion()
+  const rawMockupY = useTransform(scrollY, [0, 600], [0, -28])
+  const mockupY = shouldReduceMotion ? 0 : rawMockupY
 
   // Order progression state machine simulation
   const orderStatuses = [
@@ -66,7 +71,7 @@ export function Hero() {
   return (
     <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden pt-20 pb-16 lg:pt-24 lg:pb-24">
       {/* Dynamic Background Glow & Grid pattern */}
-      <div className="absolute inset-0 -z-10 overflow-hidden">
+      <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-indigo-600/20 via-purple-600/15 to-emerald-500/20 rounded-full blur-3xl opacity-60 animate-pulse" />
         <div className="absolute -top-10 -left-10 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl opacity-50" />
         <div className="absolute top-1/3 -right-10 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl opacity-50" />
@@ -78,14 +83,14 @@ export function Hero() {
           
           {/* Left Hero Content */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
             className="lg:col-span-6 text-left"
           >
             {/* Live Operational Status Pill */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, delay: 0.1 }}
               className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xs font-semibold tracking-wide mb-6 backdrop-blur-sm"
@@ -99,26 +104,22 @@ export function Hero() {
               <span className="text-indigo-600 dark:text-indigo-400 font-bold">0% Commission</span>
             </motion.div>
 
-            {/* Headline */}
+            {/* Headline - Restrained treatment: solid foreground + single brand indigo gradient on "Digitized." */}
             <motion.h1
-              initial={{ opacity: 0, y: 15 }}
+              initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
               className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.12] mb-6 text-slate-900 dark:text-white"
             >
-              One Platform. <br />
-              <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-500 dark:from-indigo-400 dark:via-purple-300 dark:to-indigo-300 bg-clip-text text-transparent">
-                Every Business.
-              </span>{' '}
-              <br />
-              <span className="bg-gradient-to-r from-amber-500 to-emerald-500 dark:from-amber-400 dark:to-emerald-400 bg-clip-text text-transparent">
+              One Platform. Every Business.{' '}
+              <span className="bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-500 dark:from-indigo-400 dark:via-violet-400 dark:to-violet-300 bg-clip-text text-transparent">
                 Digitized.
               </span>
             </motion.h1>
 
             {/* Subheadline */}
             <motion.p
-              initial={{ opacity: 0, y: 15 }}
+              initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
               className="text-base sm:text-lg text-slate-600 dark:text-slate-300 mb-8 max-w-xl leading-relaxed font-normal"
@@ -128,14 +129,14 @@ export function Hero() {
 
             {/* Interactive Primary & Secondary CTAs */}
             <motion.div
-              initial={{ opacity: 0, y: 15 }}
+              initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.4 }}
               className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4"
             >
               <Link
                 href="/register"
-                className="inline-flex items-center justify-center px-7 py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-xl font-bold text-sm sm:text-base shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all group"
+                className="inline-flex items-center justify-center px-7 py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-xl font-bold text-sm sm:text-base shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 group"
               >
                 <Zap className="w-4 h-4 mr-2 text-amber-300 fill-amber-300" />
                 🚀 Launch Restaurant Free Trial
@@ -144,7 +145,7 @@ export function Hero() {
 
               <Link
                 href="/order/demo-restaurant/A-01"
-                className="inline-flex items-center justify-center px-6 py-3.5 border-2 border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-900 dark:text-slate-100 rounded-xl font-semibold text-sm sm:text-base backdrop-blur-md transition-all hover:border-indigo-500/50 shadow-sm"
+                className="inline-flex items-center justify-center px-6 py-3.5 border-2 border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-900 dark:text-slate-100 rounded-xl font-semibold text-sm sm:text-base backdrop-blur-md transition-all duration-200 hover:border-indigo-500/50 hover:scale-[1.02] shadow-sm"
               >
                 <Smartphone className="w-4 h-4 mr-2 text-indigo-500" />
                 📱 Test Live QR Demo
@@ -173,13 +174,17 @@ export function Hero() {
             </motion.div>
           </motion.div>
 
-          {/* Right Hero Graphic - Floating Glassmorphism Mockup with Vertical Tabs */}
+          {/* Right Hero Graphic - Parallax Floating Glassmorphism Mockup with Vertical Tabs & Ambient Glow */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
+            style={{ y: mockupY }}
             transition={{ duration: 0.8, delay: 0.2 }}
             className="lg:col-span-6 relative"
           >
+            {/* Soft Ambient Accent Glow behind Mockup */}
+            <div className="absolute -inset-3 bg-gradient-to-r from-indigo-600/20 via-purple-600/15 to-indigo-500/20 rounded-3xl blur-3xl opacity-70 -z-10 pointer-events-none" />
+
             {/* Vertical Selector Tabs Header */}
             <div className="flex items-center justify-start sm:justify-center gap-1.5 mb-4 p-1.5 rounded-2xl bg-slate-200/70 dark:bg-slate-900/80 border border-slate-300/60 dark:border-slate-800 backdrop-blur-md overflow-x-auto">
               <button

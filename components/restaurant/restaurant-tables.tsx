@@ -26,6 +26,8 @@ import {
 import QRCode from 'qrcode'
 import { createClient } from '@/lib/supabase/client'
 import { currentRestaurantTenant } from '@/lib/restaurant'
+import { CustomerBillPrintModal } from '@/components/restaurant/kot-receipt-modal'
+import { CustomerBillData } from '@/lib/print-engine'
 
 type Table = {
   id: string
@@ -200,10 +202,53 @@ export function RestaurantTables() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState<Table | null>(null)
   const [showQrStandModal, setShowQrStandModal] = useState<Table | null>(null)
+  const [billModalData, setBillModalData] = useState<CustomerBillData | null>(null)
   const [formNumber, setFormNumber] = useState('')
   const [formSeats, setFormSeats] = useState('4')
   const [formNotice, setFormNotice] = useState('')
   const previousRequestsRef = useRef('')
+
+  const openConsolidatedBillPrint = (targetOrders: Order[], table: Table) => {
+    if (!targetOrders.length) return
+    const orderNumbersStr = Array.from(new Set(targetOrders.map((o) => `#${o.order_number}`))).join(', ')
+    const itemMap = new Map<string, { name: string; quantity: number; unitPrice: number; lineTotal: number }>()
+
+    targetOrders.forEach((o) => {
+      ;(o.restaurant_order_items || []).forEach((i) => {
+        const key = i.item_name
+        const qty = i.quantity || 1
+        const unitPrice = (i as any).unit_price || ((i as any).line_total ? (i as any).line_total / qty : 0)
+        const lineTotal = (i as any).line_total || unitPrice * qty
+
+        if (itemMap.has(key)) {
+          const existing = itemMap.get(key)!
+          existing.quantity += qty
+          existing.lineTotal += lineTotal
+        } else {
+          itemMap.set(key, {
+            name: i.item_name,
+            quantity: qty,
+            unitPrice: unitPrice,
+            lineTotal: lineTotal,
+          })
+        }
+      })
+    })
+
+    const items = Array.from(itemMap.values())
+    const grandTotal = targetOrders.reduce((sum, o) => sum + Number(o.total), 0)
+
+    setBillModalData({
+      restaurant: restaurantName,
+      table: formatTableBadge(table.table_number),
+      orderNumber: orderNumbersStr,
+      createdAt: targetOrders[0]?.created_at,
+      items,
+      subtotal: grandTotal,
+      grandTotal: grandTotal,
+      paymentStatus: 'UNPAID',
+    })
+  }
 
   const load = async () => {
     const currentTenant = tenant || (await currentRestaurantTenant())
@@ -927,6 +972,13 @@ export function RestaurantTables() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <button
+                    onClick={() => openConsolidatedBillPrint(inspectOrders, selectedTable)}
+                    className="col-span-2 rounded-xl border border-primary/40 bg-background py-2.5 text-xs font-bold text-foreground hover:bg-secondary flex items-center justify-center gap-1.5"
+                  >
+                    <Printer className="size-4 text-emerald-600" /> Print Bill ({inspectOrders.length} Order{inspectOrders.length > 1 ? 's' : ''})
+                  </button>
+
+                  <button
                     disabled={settling}
                     onClick={() => void settleOrders('cash')}
                     className="rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 flex items-center justify-center gap-1"
@@ -959,6 +1011,9 @@ export function RestaurantTables() {
           </section>
         </div>
       )}
+
+      {/* CUSTOMER BILL PRINT MODAL */}
+      <CustomerBillPrintModal data={billModalData} onClose={() => setBillModalData(null)} />
     </div>
   )
 }

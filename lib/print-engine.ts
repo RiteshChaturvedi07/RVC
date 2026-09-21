@@ -28,7 +28,7 @@ export type CustomerBillData = {
   gstin?: string
   fssaiNo?: string
   table: string
-  orderNumber: number
+  orderNumber: number | string
   createdAt?: string
   items: BillItem[]
   subtotal: number
@@ -136,10 +136,15 @@ export function printThermalCustomerBill(data: CustomerBillData) {
     )
     .join('')
 
+  const formattedOrderNum =
+    typeof data.orderNumber === 'string' && data.orderNumber.startsWith('#')
+      ? data.orderNumber
+      : `#${data.orderNumber}`
+
   const html = `<!doctype html>
 <html>
 <head>
-  <title>Tax Invoice - #${data.orderNumber}</title>
+  <title>Tax Invoice - ${formattedOrderNum}</title>
   <style>
     @page { size: 80mm auto; margin: 2mm; }
     * { box-sizing: border-box; font-family: monospace, Arial, sans-serif; color: #000; }
@@ -166,7 +171,7 @@ export function printThermalCustomerBill(data: CustomerBillData) {
   <div class="divider"></div>
   <div class="center bold" style="font-size: 13px;">TAX INVOICE</div>
   <div style="display: flex; justify-content: space-between; margin-top: 4px;">
-    <span>Order: <b>#${data.orderNumber}</b></span>
+    <span>Order: <b>${formattedOrderNum}</b></span>
     <span>Table: <b>${data.table}</b></span>
   </div>
   <div>Date: ${new Date(data.createdAt || Date.now()).toLocaleString('en-IN')}</div>

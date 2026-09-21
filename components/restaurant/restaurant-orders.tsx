@@ -256,22 +256,63 @@ export function RestaurantOrders() {
   }
 
   const triggerReceiptPrint = (order: Order) => {
+    const tableNum = order.restaurant_tables?.table_number
+    let matchingOrders = [order]
+    if (tableNum) {
+      const sameTableOrders = orders.filter(
+        (o) =>
+          o.restaurant_tables?.table_number === tableNum &&
+          o.payment_status !== 'paid' &&
+          o.status !== 'cancelled'
+      )
+      if (sameTableOrders.length > 0) {
+        matchingOrders = sameTableOrders
+      }
+    }
+
+    const orderNumbersStr = Array.from(new Set(matchingOrders.map((o) => `#${o.order_number}`))).join(', ')
+
+    const itemMap = new Map<string, { name: string; quantity: number; unitPrice: number; lineTotal: number }>()
+
+    matchingOrders.forEach((o) => {
+      ;(o.restaurant_order_items || []).forEach((item) => {
+        const key = item.item_name
+        const unitPrice = item.unit_price || (item.line_total ? item.line_total / item.quantity : 0)
+        const lineTotal = item.line_total || unitPrice * item.quantity
+
+        if (itemMap.has(key)) {
+          const existing = itemMap.get(key)!
+          existing.quantity += item.quantity
+          existing.lineTotal += lineTotal
+        } else {
+          itemMap.set(key, {
+            name: item.item_name,
+            quantity: item.quantity,
+            unitPrice: unitPrice,
+            lineTotal: lineTotal,
+          })
+        }
+      })
+    })
+
+    const items = Array.from(itemMap.values())
+    const subtotal = matchingOrders.reduce((sum, o) => sum + Number(o.subtotal || o.total), 0)
+    const discount = matchingOrders.reduce((sum, o) => sum + Number(o.discount_amount || 0), 0)
+    const taxAmount = matchingOrders.reduce((sum, o) => sum + Number(o.tax_amount || 0), 0)
+    const grandTotal = matchingOrders.reduce((sum, o) => sum + Number(o.total), 0)
+    const allPaid = matchingOrders.every((o) => o.payment_status === 'paid')
+
     setBillModalData({
       restaurant: 'RVC Restaurant',
-      table: formatTableBadge(order.restaurant_tables?.table_number),
-      orderNumber: order.order_number,
+      table: formatTableBadge(tableNum),
+      orderNumber: orderNumbersStr,
       createdAt: order.created_at,
-      items: order.restaurant_order_items.map((item) => ({
-        name: item.item_name,
-        quantity: item.quantity,
-        unitPrice: item.unit_price,
-        lineTotal: item.line_total,
-      })),
-      subtotal: Number(order.subtotal || order.total),
-      discount: Number(order.discount_amount || 0),
-      taxAmount: Number(order.tax_amount || 0),
-      grandTotal: Number(order.total),
-      paymentStatus: order.payment_status === 'paid' ? 'PAID' : 'UNPAID',
+      items,
+      subtotal,
+      discount,
+      taxAmount,
+      grandTotal,
+      paymentStatus: allPaid ? 'PAID' : 'UNPAID',
     })
   }
 

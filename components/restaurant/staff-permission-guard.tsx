@@ -11,6 +11,7 @@ const required:Record<string,string|undefined>={
  '/restaurant-dashboard/menu':'Menu Builder',
  '/restaurant-dashboard/inventory':'Inventory',
  '/restaurant-dashboard/customers':'Customers',
+ '/restaurant-dashboard/reviews':'Reviews',
  '/restaurant-dashboard/marketing':'Marketing',
  '/restaurant-dashboard/analytics':'Analytics',
  '/restaurant-dashboard/finance':'Finance',

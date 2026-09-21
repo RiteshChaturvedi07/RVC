@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import {
   UtensilsCrossed,
   Dumbbell,
@@ -23,6 +23,7 @@ export function SolutionsGrid() {
   const [activeVerticalTitle, setActiveVerticalTitle] = useState('')
   const [waitlistInput, setWaitlistInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const shouldReduceMotion = useReducedMotion()
 
   const openWaitlist = (vertical: string) => {
     setActiveVerticalTitle(vertical)
@@ -45,65 +46,84 @@ export function SolutionsGrid() {
   }
 
   return (
-    <section id="solutions" className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 relative overflow-hidden bg-slate-50/50 dark:bg-[#090d16]/80 border-y border-slate-200/80 dark:border-slate-800/80">
-      {/* Glow Backdrop Effects */}
+    <section id="solutions" className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 relative overflow-hidden bg-slate-50/60 dark:bg-[#080d1a] border-y border-slate-200/80 dark:border-slate-800/80">
+      {/* Background Gradient Mesh & Grid */}
       <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/2 left-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/3 left-[-10%] w-[500px] h-[500px] bg-indigo-500/10 dark:bg-indigo-600/15 rounded-full blur-[120px]" />
+        <div className="absolute bottom-10 right-[-10%] w-[500px] h-[500px] bg-emerald-500/10 dark:bg-emerald-500/10 rounded-full blur-[120px]" />
+        <div 
+          className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+          style={{
+            backgroundImage: `radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)`,
+            backgroundSize: '24px 24px',
+          }}
+        />
       </div>
 
       <div className="max-w-7xl mx-auto">
-        {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          viewport={{ once: true }}
-          className="text-center mb-16"
-        >
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-widest mb-4">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Vertical OS Architecture</span>
-          </div>
+        {/* Asymmetric Left-Aligned Section Header (Rhythm Variation) */}
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between mb-16 gap-6 pb-8 border-b border-slate-200/60 dark:border-slate-800/60">
+          <motion.div
+            initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 20, scale: 0.98 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            viewport={{ once: true }}
+            className="max-w-2xl"
+          >
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-widest mb-4">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Vertical OS Architecture</span>
+            </div>
 
-          <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white mb-4">
-            Tailored Industry Solutions for <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-500 dark:from-indigo-400 dark:via-purple-300 dark:to-indigo-300 bg-clip-text text-transparent">
-              Tier-2 & Tier-3 Cities
-            </span>
-          </h2>
-          <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
+            <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.15]">
+              Tailored Industry Solutions for{' '}
+              <span className="bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 dark:from-indigo-400 dark:via-indigo-300 dark:to-violet-400 bg-clip-text text-transparent">
+                Tier-2 & Tier-3 Cities
+              </span>
+            </h2>
+          </motion.div>
+
+          <motion.p
+            initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            viewport={{ once: true }}
+            className="text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-md leading-relaxed"
+          >
             One powerful core engine adapted into specialized operating software for restaurants, gyms, institutes, clinics, and businesses.
-          </p>
-        </motion.div>
+          </motion.p>
+        </div>
 
         {/* Bento Grid Layout (Featured 60% Width + Standard Cards) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* Card 1: Featured Bento Card (60% Width / Col-span-2) - Restaurant POS & Digital OS (LIVE NOW 🟢) */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
+            initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 24, scale: 0.96 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             viewport={{ once: true }}
-            className="lg:col-span-2 group relative overflow-hidden rounded-3xl border-2 border-emerald-500/40 bg-gradient-to-br from-white via-emerald-50/20 to-indigo-50/30 dark:from-[#0d1322] dark:via-[#0c1626] dark:to-[#0f172a] p-8 shadow-xl hover:shadow-2xl transition-all duration-300 flex flex-col justify-between"
+            whileHover={shouldReduceMotion ? {} : { y: -5 }}
+            className="lg:col-span-2 group relative overflow-hidden rounded-3xl border border-emerald-500/30 dark:border-emerald-500/30 bg-gradient-to-br from-white via-emerald-50/30 to-indigo-50/20 dark:from-[#0b1324] dark:via-[#0c182b] dark:to-[#0f172a] p-8 shadow-lg shadow-emerald-950/5 hover:shadow-2xl hover:shadow-emerald-500/10 hover:border-emerald-500/60 transition-all duration-300 flex flex-col justify-between"
           >
-            {/* Top Badge & Live Indicator */}
+            {/* Soft Ambient Inner Glow */}
+            <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
             <div>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-                <div className="flex items-center gap-2">
-                  <div className="p-2.5 rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/30">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-emerald-500 text-white shadow-md shadow-emerald-500/30 group-hover:scale-105 transition-transform duration-300">
                     <UtensilsCrossed className="w-6 h-6" />
                   </div>
                   <div>
-                    <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider block">Production Ready</span>
+                    <span className="text-xs font-mono font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider block">Production Ready</span>
                     <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
                       Restaurant POS & Digital OS
                     </h3>
                   </div>
                 </div>
 
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold shadow-sm">
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold shadow-sm">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   LIVE NOW 🟢
                 </span>
@@ -114,7 +134,7 @@ export function SolutionsGrid() {
                 {['0% Commission', 'Zero App Download', 'Live KDS Sync', 'Smart Inventory & Billing'].map((badge) => (
                   <span
                     key={badge}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-slate-900/5 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 text-xs font-semibold"
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 text-xs font-semibold shadow-xs"
                   >
                     <Check className="w-3.5 h-3.5 text-emerald-500" />
                     {badge}
@@ -129,17 +149,17 @@ export function SolutionsGrid() {
 
               {/* Mini Feature Highlights */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
-                <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm">
+                <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-sm shadow-xs group-hover:border-indigo-500/30 transition-colors">
                   <QrCode className="w-5 h-5 text-indigo-500 mb-1.5" />
                   <div className="font-bold text-xs text-slate-900 dark:text-white">QR Table Ordering</div>
                   <div className="text-[11px] text-slate-500">Scan, order & pay instantly</div>
                 </div>
-                <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm">
+                <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-sm shadow-xs group-hover:border-emerald-500/30 transition-colors">
                   <ShieldCheck className="w-5 h-5 text-emerald-500 mb-1.5" />
                   <div className="font-bold text-xs text-slate-900 dark:text-white">Direct Settlement</div>
                   <div className="text-[11px] text-slate-500">Instant UPI into your bank</div>
                 </div>
-                <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm">
+                <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-sm shadow-xs group-hover:border-amber-500/30 transition-colors">
                   <Sparkles className="w-5 h-5 text-amber-500 mb-1.5" />
                   <div className="font-bold text-xs text-slate-900 dark:text-white">Kitchen Display</div>
                   <div className="text-[11px] text-slate-500">Zero order slip errors</div>
@@ -149,33 +169,39 @@ export function SolutionsGrid() {
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-4 border-t border-slate-200/80 dark:border-slate-800/80">
-              <Link
-                href="/register"
-                className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-bold text-sm shadow-md transition-all hover:scale-[1.02] group"
-              >
-                Launch Restaurant OS Free Trial
-                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-              </Link>
-              <Link
-                href="/order/demo-restaurant/A-01"
-                className="inline-flex items-center justify-center px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-semibold text-sm hover:border-indigo-500/50 transition-colors"
-              >
-                Test Live QR Customer Demo →
-              </Link>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Link
+                  href="/register"
+                  className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-bold text-sm shadow-md shadow-emerald-600/20 hover:shadow-lg hover:shadow-emerald-600/30 transition-all group/btn"
+                >
+                  Launch Restaurant OS Free Trial
+                  <ArrowRight className="w-4 h-4 ml-2 group-hover/btn:translate-x-1 transition-transform" />
+                </Link>
+              </motion.div>
+
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Link
+                  href="/order/demo-restaurant/A-01"
+                  className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-semibold text-sm hover:border-indigo-500/50 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-xs"
+                >
+                  Test Live QR Customer Demo →
+                </Link>
+              </motion.div>
             </div>
           </motion.div>
 
           {/* Card 2: Gym & Fitness OS (Early Access ⚡) */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
+            initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 24, scale: 0.96 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
             viewport={{ once: true }}
-            className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d1322] p-6 shadow-lg hover:border-amber-500/40 transition-all flex flex-col justify-between"
+            whileHover={shouldReduceMotion ? {} : { y: -5 }}
+            className="group rounded-3xl border border-slate-200/80 dark:border-slate-800/90 bg-white dark:bg-[#0b1324] p-6 shadow-md shadow-slate-950/5 hover:shadow-xl hover:shadow-amber-500/10 hover:border-amber-500/50 transition-all duration-300 flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between mb-4">
-                <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 group-hover:scale-105 transition-transform">
                   <Dumbbell className="w-6 h-6" />
                 </div>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold">
@@ -216,15 +242,16 @@ export function SolutionsGrid() {
 
           {/* Card 3: School & College ERP (Coming Soon 🚀) */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
+            initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 24, scale: 0.96 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.16, ease: [0.16, 1, 0.3, 1] }}
             viewport={{ once: true }}
-            className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d1322] p-6 shadow-lg hover:border-indigo-500/40 transition-all flex flex-col justify-between"
+            whileHover={shouldReduceMotion ? {} : { y: -5 }}
+            className="group rounded-3xl border border-slate-200/80 dark:border-slate-800/90 bg-white dark:bg-[#0b1324] p-6 shadow-md shadow-slate-950/5 hover:shadow-xl hover:shadow-indigo-500/10 hover:border-indigo-500/50 transition-all duration-300 flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between mb-4">
-                <div className="p-3 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                <div className="p-3 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 group-hover:scale-105 transition-transform">
                   <GraduationCap className="w-6 h-6" />
                 </div>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold">
@@ -265,15 +292,16 @@ export function SolutionsGrid() {
 
           {/* Card 4: Hospital & Clinic HIS (Coming Soon 🚀) */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
+            initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 24, scale: 0.96 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.24, ease: [0.16, 1, 0.3, 1] }}
             viewport={{ once: true }}
-            className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d1322] p-6 shadow-lg hover:border-purple-500/40 transition-all flex flex-col justify-between"
+            whileHover={shouldReduceMotion ? {} : { y: -5 }}
+            className="group rounded-3xl border border-slate-200/80 dark:border-slate-800/90 bg-white dark:bg-[#0b1324] p-6 shadow-md shadow-slate-950/5 hover:shadow-xl hover:shadow-purple-500/10 hover:border-purple-500/50 transition-all duration-300 flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between mb-4">
-                <div className="p-3 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                <div className="p-3 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 group-hover:scale-105 transition-transform">
                   <Stethoscope className="w-6 h-6" />
                 </div>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-bold">
@@ -310,15 +338,16 @@ export function SolutionsGrid() {
 
           {/* Card 5: Real Estate & Service CRM (Coming Soon 🚀) */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
+            initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 24, scale: 0.96 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.32, ease: [0.16, 1, 0.3, 1] }}
             viewport={{ once: true }}
-            className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d1322] p-6 shadow-lg hover:border-blue-500/40 transition-all flex flex-col justify-between"
+            whileHover={shouldReduceMotion ? {} : { y: -5 }}
+            className="group rounded-3xl border border-slate-200/80 dark:border-slate-800/90 bg-white dark:bg-[#0b1324] p-6 shadow-md shadow-slate-950/5 hover:shadow-xl hover:shadow-blue-500/10 hover:border-blue-500/50 transition-all duration-300 flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between mb-4">
-                <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 group-hover:scale-105 transition-transform">
                   <Building2 className="w-6 h-6" />
                 </div>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-bold">
@@ -359,16 +388,17 @@ export function SolutionsGrid() {
       {/* Interactive Waitlist Modal */}
       <AnimatePresence>
         {waitlistModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md">
             <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2 }}
               className="relative w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl"
             >
               <button
                 onClick={() => setWaitlistModalOpen(false)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -414,3 +444,4 @@ export function SolutionsGrid() {
     </section>
   )
 }
+

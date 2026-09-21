@@ -24,7 +24,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { printReceipt, type ReceiptOrder } from '@/components/restaurant/order-receipt'
 
@@ -69,6 +69,7 @@ const money = (value: number) => `₹${Number(value || 0).toLocaleString('en-IN'
 
 export default function OrderPage() {
   const params = useParams<{ restaurantSlug: string; tableNumber: string }>()
+  const router = useRouter()
   const db = useMemo(() => createClient(), [])
 
   const [menu, setMenu] = useState<Menu | null>(null)
@@ -159,6 +160,16 @@ export default function OrderPage() {
       pairing: ['Chicken Biryani', 'Gulab Jamun'],
     }
   }, [])
+
+  // Ongoing Active Order for Sticky Tracker Pill
+  const activeOrder = useMemo(() => {
+    const lastId = typeof window !== 'undefined' ? sessionStorage.getItem('lastOrderId') : null
+    if (lastId) {
+      const match = orders.find((o) => o.id === lastId && o.payment_status !== 'paid' && !['completed', 'closed'].includes(o.status))
+      if (match) return match
+    }
+    return orders.find((o) => o.payment_status !== 'paid' && !['completed', 'closed'].includes(o.status))
+  }, [orders])
 
   if (!menu) {
     return (
@@ -286,7 +297,7 @@ export default function OrderPage() {
   // Place Order
   const handlePlaceOrder = async () => {
     if (!selectedItems.length) return
-    const { error } = await db.rpc('create_public_restaurant_order', {
+    const { data, error } = await db.rpc('create_public_restaurant_order', {
       p_table_token: menu.table.token,
       p_customer_phone: phone,
       p_customer_name: name,
@@ -305,8 +316,14 @@ export default function OrderPage() {
     } else {
       setCart({})
       setCheckout(false)
-      setHistory(true)
-      setToastMessage('🎉 Order placed successfully! Kitchen is preparing your dishes.')
+      const newOrderId = data?.id
+      if (newOrderId) {
+        sessionStorage.setItem('lastOrderId', newOrderId)
+        router.push(`/order/${params.restaurantSlug}/${params.tableNumber}/track/${newOrderId}`)
+      } else {
+        setHistory(true)
+        setToastMessage('🎉 Order placed successfully! Kitchen is preparing your dishes.')
+      }
     }
   }
 
@@ -343,6 +360,16 @@ export default function OrderPage() {
 
           {/* SERVICE ACTION BUTTONS */}
           <div className="flex items-center gap-1.5">
+            {activeOrder && (
+              <button
+                onClick={() => router.push(`/order/${params.restaurantSlug}/${params.tableNumber}/track/${activeOrder.id}`)}
+                className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 flex items-center gap-1 shadow-2xs animate-pulse"
+              >
+                <Clock className="size-3.5 text-emerald-500" />
+                <span>Active Order</span>
+              </button>
+            )}
+
             <button
               onClick={() => void handleCallWaiter()}
               disabled={requesting}
@@ -619,6 +646,36 @@ export default function OrderPage() {
           </div>
         )}
       </section>
+
+      {/* FLOATING BOTTOM STICKY TRACKER CAPSULE */}
+      {activeOrder && (
+        <div className={`fixed left-4 right-4 z-40 mx-auto max-w-md ${selectedItems.length > 0 || activeOrders.length > 0 ? 'bottom-20' : 'bottom-4'}`}>
+          <div className="flex items-center justify-between gap-2 rounded-2xl border border-emerald-500/40 bg-slate-900/95 p-3 text-white shadow-2xl backdrop-blur-md dark:bg-slate-900/95">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="relative flex size-3 shrink-0">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex size-3 rounded-full bg-emerald-500" />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-extrabold text-slate-100 flex items-center gap-1">
+                  <span>Order #{activeOrder.order_number || activeOrder.id.slice(0, 6)}</span>
+                  <span className="text-emerald-400 font-medium">is being prepared in kitchen…</span>
+                </p>
+                <p className="text-[10px] text-slate-400 font-medium">
+                  {activeOrder.items?.length || 0} item{(activeOrder.items?.length || 0) === 1 ? '' : 's'} · Live updates active
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push(`/order/${params.restaurantSlug}/${params.tableNumber}/track/${activeOrder.id}`)}
+              className="shrink-0 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-black text-slate-950 shadow-md hover:bg-emerald-400 transition-all flex items-center gap-1"
+            >
+              <span>View Live Status</span>
+              <span>➔</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* FLOATING BOTTOM CART ACTION BAR */}
       {(selectedItems.length > 0 || activeOrders.length > 0) && (
